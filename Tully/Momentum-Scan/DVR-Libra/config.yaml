@@ -1,0 +1,45 @@
+# Exact quantum dynamics (grid / split-operator Fourier transform) of the Tully 1 model:
+# scan of the incident momentum p0. For every p0 one wavepacket is propagated and the
+# channel-resolved populations C_Rg, C_Tg, C_Re, C_Te at the end of the run are collected.
+#
+# Everything is in atomic units (hbar = 1).
+
+model:                 # V11 = A*(1-exp(-B*x)) for x>0, -A*(1-exp(B*x)) for x<0;  V22 = -V11
+  A: 0.01              # V12 = C*exp(-D*x^2)
+  B: 1.6
+  C: 0.005
+  D: 1.0
+
+wavepacket:            # psi(x,0) ~ exp(-(x-x0)^2 / (4 sigma^2)) * exp(i p0 x)
+  mass: 2000.0
+  x0: -10.0            # initial position, left of the crossing at x = 0
+  sigma: 1.0           # std. dev. of |psi|^2 in x (same for every p0)
+  representation: diabatic   # "diabatic" or "adiabatic"
+  state: 0             # initial state index (diabatic 0 = lower adiabatic state for x << 0)
+
+grids:
+  p0:                  # incident momentum, directed toward the crossing
+    start: 2.0
+    stop: 30.0         # inclusive
+    num: 27            # evenly spaced -> spacing 1.0
+
+grid:
+  x_min: -100.0
+  x_max: 100.0
+  npts: 8192           # FFT grid; max representable momentum = pi*npts/(x_max-x_min)
+
+dyn:
+  method: split-operator   # the only propagator implemented in libra's exact_torch solver
+  dt: 0.5
+  save_every: 20       # keep a snapshot every this many steps
+  max_snapshots: 500   # long runs widen save_every so no more snapshots than this are stored
+  num_threads: 1       # cores per scan point (local: taskset block)
+  # nsteps is not set here: run_dvr_point.py picks it for every p0 so that the wavepacket centre
+  # reaches analysis.x_split at the quarter point of the run (classical travel time from x0).
+
+analysis:
+  x_split: 0.0         # x > x_split counts as transmitted, x < x_split as reflected
+
+runtime:
+  ncores: 4            # local only: TOTAL cores; runs ncores // num_threads points at once
+  grid_dir: p0_grid    # output directory (relative to this folder)
