@@ -18,8 +18,7 @@ grids:
     num: 50             # evenly spaced in log10 -> spacing 0.1
 
 heom:
-  #KK: 3
-  KK: 0
+  KK: 2
   LL: 16
   spectral_density: 1              # 1 = Brownian oscillator (expansion has KK+2 terms)
   truncation_scheme: 4

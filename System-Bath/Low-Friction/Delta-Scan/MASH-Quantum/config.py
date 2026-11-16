@@ -16,7 +16,7 @@ CONFIG = {
     'slurm': {
         'max_tasks'     : 500,
         'job_name'      : 'MASHRPMD',
-        'time'          : '29:00:00',
+        'time'          : '39:00:00',
         'cpus_per_task' : 10,
         'max_concurrent': None,
         'partition'     : None,
@@ -55,5 +55,5 @@ CONFIG = {
     'therm_log10_delta' : -7.0,
     'therm_time'        : 25.0,
     'traj_time'         : 5.0,
-    'Nprint'            : 500,  
+    'Nprint'            : 2500,  
 }
