@@ -31,6 +31,7 @@ _ts = _therm_scan()
 
 
 def run_trajectory(cfg, seed):
+    _ts.noise_grid_check(cfg, float(cfg['total_time']))
     rng = np.random.default_rng(seed)
     nucR, nucP = _ts._sample_nvt(cfg, rng)
 

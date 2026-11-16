@@ -31,6 +31,7 @@ CONFIG = {
 
     # ------------------------------------------------------------------ dynamics
     'dynamics'          : 'bo',                  # Born-Oppenheimer on the lower adiabat
+    #'nbds'              : 6,                    # number of ring-polymer beads
     'nbds'              : 12,                    # number of ring-polymer beads
     'jump_index'        : [],                    # unused by BO
     'jump_gap'          : None,                  # unused by BO
@@ -44,6 +45,7 @@ CONFIG = {
     #'kvec'              : 2.0,                   # marcus parabola curvature
     #'kvec'              : 2.0,                   # marcus parabola curvature
     'kvec'              : 4.0,                   # marcus parabola curvature
+    #'kvec'              : 0.0625,                   # marcus parabola curvature
     'lbd'               : 12.0,                  # reorganization energy
     'epsil'             : -100.0,                # driving force
     'log10_delta'       : -7.0,                  # diabatic coupling strength
@@ -53,11 +55,13 @@ CONFIG = {
     #'delt'              : 5e-4,
     #'delt'              : 5e-4,
     'delt'              : 2e-4,
+    #'delt'              : 1e-3,
     'intype'            : 'spin_magnus_adaptive',
     'langevin'          : 'generalized',
     #'langevin_params'   : {'gamma': 2.0, 'Tmem': 15.0, 'Tfluc': 35.0},
     #'langevin_params'   : {'gamma': 64.0, 'Tmem': 15.0, 'Tfluc': 35.0},
     'langevin_params'   : {'gamma': 4.0, 'Tmem': 15.0, 'Tfluc': 35.0},
+    #'langevin_params'   : {'gamma': 0.25, 'Tmem': 20.0, 'Tfluc': 100.0},
     'total_time'        : 35.0,
     'Nprint'            : 50,  
 }

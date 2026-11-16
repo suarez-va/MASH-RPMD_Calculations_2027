@@ -136,6 +136,7 @@ def scan_points(cfg):
         over = lambda v: {'delta': 10**float(v), 'log10_delta': float(v), 'epsil': ep}
     if not values:
         raise ValueError(f'{"epsil_scan" if key == "epsil" else "log10_delta_scan"} is empty')
+    noise_grid_check(cfg, float(cfg['therm_time']) + float(cfg['traj_time']))
     return [(_point_name(key, v), over(v)) for v in values]
 
 
@@ -147,6 +148,43 @@ def buffer_sizes(cfg):
     Nmem  = int(np.ceil(float(lp['Tmem']) / delt))     # ceil
     Nfluc = int(float(lp['Tfluc']) / (2 * delt))       # truncation, NOT ceil
     return Nmem, Nfluc, 2 * Nfluc
+
+
+def noise_grid_ratio(kvec, mass, gamma, Tfluc, delt):
+    """
+    Stationary centroid <x^2> in the harmonic well, under the GLE's discretized fluctuating force,
+    relative to the exact 1/(beta kvec).  The force is a Fourier series on omega_j = j*dw with
+    dw = 2 pi / Tfluc (utils.fluctuating_coeffs), so the frequency integral of the response
+    |chi(omega)|^2 = 1/((kvec - m omega^2)^2 + (gamma omega)^2) becomes a trapezoid sum, which is only
+    accurate while dw resolves the response (width ~ gamma when underdamped).
+    """
+    N = int(float(Tfluc) / (2 * delt))
+    dw = np.pi / (N * delt)
+    w = np.arange(N + 1) * dw
+    wt = np.full(N + 1, dw); wt[0] = wt[-1] = dw / 2
+    return kvec * (2 * gamma / np.pi) * np.sum(wt / ((kvec - mass * w**2)**2 + (gamma * w)**2))
+
+
+def noise_grid_check(cfg, total_time, tol=0.02):
+    """Stop a run whose GLE noise grid (Tfluc) cannot thermalize the centroid, or repeats in-run."""
+    if cfg.get('langevin') != 'generalized':
+        return
+    lp = cfg['langevin_params']
+    delt, gamma, Tfluc = float(cfg['delt']), float(lp['gamma']), float(lp['Tfluc'])
+    kvec, mass = float(cfg['kvec']), float(np.atleast_1d(cfg['mass'])[0])
+    period = 2 * int(Tfluc / (2 * delt)) * delt
+    if total_time > period * (1 + 1e-9):
+        raise ValueError(f'the run lasts {total_time:g} but the GLE noise repeats after Tfluc = '
+                         f'{period:g}: set Tfluc >= {total_time:g}')
+    r = noise_grid_ratio(kvec, mass, gamma, Tfluc, delt)
+    if abs(r - 1) > tol:
+        T = Tfluc
+        while abs(noise_grid_ratio(kvec, mass, gamma, T, delt) - 1) > tol and T < 1e4 * Tfluc:
+            T *= 1.25
+        raise ValueError(f'Tfluc = {Tfluc:g} is too short for kvec = {kvec:g}, gamma = {gamma:g}: the '
+                         f'noise frequency grid (spacing 2 pi/Tfluc = {2 * np.pi / Tfluc:.3g}) would '
+                         f'thermalize the centroid to <x^2> = {r:.3f} x the correct 1/(beta kvec). '
+                         f'Use Tfluc >= {np.ceil(T):g}')
 
 
 def _sample_nvt(cfg, rng):
