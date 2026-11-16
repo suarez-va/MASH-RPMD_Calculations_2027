@@ -13,9 +13,9 @@ system:
 
 grids:
   log10_Delta:         # electronic coupling: Delta = 10**(log10_Delta) / beta
-    start: -1.50
+    start: -0.75
     stop: 0.57           # inclusive
-    num: 50             # evenly spaced in log10 -> spacing 0.1
+    num: 100             # evenly spaced in log10 -> spacing 0.1
 
 heom:
   KK: 2

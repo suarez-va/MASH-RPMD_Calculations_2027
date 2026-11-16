@@ -5,10 +5,10 @@
 
 CONFIG = {
     # ----------------------------------------------------------------- orchestration (workflow)
-    'n_traj'      : 10000000,                    # number of independent trajectories to run
+    'n_traj'      : 1000000,                    # number of independent trajectories to run
     'base_seed'   : None,                       # int -> reproducible; None -> fresh OS entropy each trajectory
     'ncores'      : 10,                         # local cores for `python -m workflow.runner`
-    'shard_size'  : 1000,                        # trajectories per shards/shard_<s>.hdf (None -> one dir per trajectory)
+    'shard_size'  : 100,                        # trajectories per shards/shard_<s>.hdf (None -> one dir per trajectory)
     'shard_dir'   : 'shards',
     'system_file' : '../../../therm_scan.py',
     'grid_dir'    : 'traj_grid',
@@ -43,7 +43,7 @@ CONFIG = {
     'kvec'              : 16.0,                  # marcus parabola curvature
     'lbd'               : 12.0,                  # reorganization energy
     'epsil'             : 0.0,                   # driving force
-    'log10_delta_scan'  : [-1.5, -1.4, -1.3, -1.2, -1.1, -1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0.0, 0,05, 0.1, 0,15, 0.2, 0,25, 0.3, 0,35, 0.4, 0,45, 0.5, 0.55, 0.57],    # diabatic coupling strength
+    'log10_delta_scan'  : [-0.75, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.57],    # diabatic coupling strength
     'bath'              : [0, 1.0, 4.0, 4.0],    # [N_bath, mass, gamma, w_b]; N_bath=0 -> no explicit bath
 
     # ------------------------------------------------------------------ thermostat + integrator
@@ -55,5 +55,5 @@ CONFIG = {
     'therm_log10_delta' : -7.0,
     'therm_time'        : 25.0,
     'traj_time'         : 5.0,
-    'Nprint'            : 500,  
+    'Nprint'            : 100,  
 }
