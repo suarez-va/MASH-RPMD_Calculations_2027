@@ -43,7 +43,7 @@ CONFIG = {
     'kvec'              : 16.0,                   # marcus parabola curvature
     'lbd'               : 12.0,                  # reorganization energy
     'epsil_scan'        : [3, 6, 9, 12, 15, 18, 21, 24, 27],    # driving force
-    'log10_delta'       : -1.0,                  # diabatic coupling strength
+    'log10_delta'       : -1.4,                  # diabatic coupling strength
     'bath'              : [0, 1.0, 4.0, 4.0],    # [N_bath, mass, gamma, w_b]; N_bath=0 -> no explicit bath
 
     # ------------------------------------------------------------------ thermostat + integrator

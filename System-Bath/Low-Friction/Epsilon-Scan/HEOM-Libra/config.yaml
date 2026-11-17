@@ -11,17 +11,17 @@ system:
   Omega: 4.00                      # Brownian oscillator frequency   [1/beta]
   Gamma: 4.00                      # Brownian oscillator damping     [1/beta]
   Lambda: 12.0                     # reorganization energy scale     [1/beta]
-  log10_Delta: -1.0                # electronic coupling: Delta = 10**(log10_Delta) / beta
+  log10_Delta: -1.4                # electronic coupling: Delta = 10**(log10_Delta) / beta
 
 grids:
   epsilon:             # driving force beta*epsilon
-    start: 0.0
-    stop: 30.5         # exclusive -> 0, 1, ..., 30
-    step: 1.0
+    start: -1.5
+    stop: 31.5         # exclusive -> 0, 1, ..., 30
+    step: 0.5
 
 heom:
-  KK: 2
-  LL: 16
+  KK: 3
+  LL: 17
   spectral_density: 1              # 1 = Brownian oscillator (expansion has KK+2 terms)
   truncation_scheme: 4
   do_scale: 1
@@ -38,9 +38,9 @@ therm:
   nprint: 1000
 
 dyn:
-  dt: 0.01
-  nsteps: 2001
-  nprint: 1
+  dt: 0.001
+  nsteps: 20001
+  nprint: 10
 
 # Rate from a line fit: beta*hbar*k = slope of K2(t) = -P2eq ln|1 - P2(t)/P2eq| vs t/(beta*hbar)
 # over [fitmin, fitmax], in units of t/(beta*hbar) (the dyn leg ends at (nsteps-1)*dt = 20).
