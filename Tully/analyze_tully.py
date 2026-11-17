@@ -210,8 +210,8 @@ def compute(path, nblocks=None, slab=None, c0=None, ncores=None, unit_rows=1000,
         cfg  = json.loads(f.attrs['config_json'])
         nbds = int(f.attrs['nbds'])
         jumps = 'weights' in f
-        if f['nucR'].shape[2] != 1:
-            raise ValueError(f"{units[0].file}: nnuc={f['nucR'].shape[2]}, but the Tully channels "
+        if f['nucR'].shape[3] != 1:               # nucR is (traj, time, nbds, nnuc)
+            raise ValueError(f"{units[0].file}: nnuc={f['nucR'].shape[3]}, but the Tully channels "
                              f"need a single nuclear coordinate")
         if jumps and f['weights'].shape[2] < 15:
             raise KeyError(f"{units[0].file} has a {f['weights'].shape[2]}-column /weights table, "

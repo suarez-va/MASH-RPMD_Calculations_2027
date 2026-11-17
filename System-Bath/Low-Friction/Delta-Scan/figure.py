@@ -105,6 +105,9 @@ for method, label, color in METHODS:
     ok = np.isfinite(mk) & (mk > 0)
     if not ok.all():
         print(f"WARNING: {method}: dropping {int((~ok).sum())} point(s) with no positive rate")
+    if not ok.any():
+        print(f"WARNING: {method}: no positive rate at all - skipping {method}")
+        continue
     points.append((label, color, s["log10_delta"][ok] + np.log10(b), np.log10(mk[ok] * b),
                    sk[ok] / (mk[ok] * np.log(10))))
 

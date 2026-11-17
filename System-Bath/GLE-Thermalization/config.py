@@ -31,9 +31,8 @@ CONFIG = {
 
     # ------------------------------------------------------------------ dynamics
     'dynamics'          : 'bo',                  # Born-Oppenheimer on the lower adiabat
-    #'nbds'              : 6,                    # number of ring-polymer beads
-    #'nbds'              : 6,                    # number of ring-polymer beads
     'nbds'              : 12,                    # number of ring-polymer beads
+    #'nbds'              : 25,                    # number of ring-polymer beads
     'jump_index'        : [],                    # unused by BO
     'jump_gap'          : None,                  # unused by BO
     'full_jump'         : False,                 # unused by BO
@@ -43,23 +42,18 @@ CONFIG = {
     'nstates'           : 2,
     'mass'              : [1.0],                 # mass
     'beta'              : 1.0,                   # inverse temperature
-    #'kvec'              : 4.0,                   # marcus parabola curvature
-    #'kvec'              : 4.0,                   # marcus parabola curvature
     'kvec'              : 16.0,                   # marcus parabola curvature
     'lbd'               : 12.0,                  # reorganization energy
     'epsil'             : -100.0,                # driving force
     'log10_delta'       : -7.0,                  # diabatic coupling strength
-    'bath'              : [0, 1.0, 1.0, 1.0],    # [N_bath, mass, gamma, w_b]; N_bath=0 -> no explicit bath
+    'bath'              : [0, 1.0, 4.0, 4.0],    # [N_bath, mass, gamma, w_b]; N_bath=0 -> no explicit bath
 
     # ------------------------------------------------------------------ thermostat + integrator
-    #'delt'              : 5e-4,
-    #'delt'              : 5e-4,
     'delt'              : 2e-4,
     'intype'            : 'spin_magnus_adaptive',
     'langevin'          : 'generalized',
-    #'langevin_params'   : {'gamma': 2.0, 'Tmem': 25.0, 'Tfluc': 100.0},
-    #'langevin_params'   : {'gamma': 64.0, 'Tmem': 25.0, 'Tfluc': 100.0},
-    'langevin_params'   : {'gamma': 4.0, 'Tmem': 25.0, 'Tfluc': 100.0},
+    'langevin_params'   : {'gamma': 4.0, 'Tmem': 13.6, 'Tfluc': 100.0},
+    #'langevin_params'   : {'gamma': 128.0, 'Tmem': 13.6, 'Tfluc': 100.0},
     'total_time'        : 100.0,
     'Nprint'            : 25,  
 }

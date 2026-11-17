@@ -4,8 +4,10 @@
 #
 # Everything is in atomic units (hbar = 1).
 
-model:                 # V11 = A*(1-exp(-B*x)) for x>0, -A*(1-exp(B*x)) for x<0;  V22 = -V11
-  A: 0.01              # V12 = C*exp(-D*x^2)
+model:                 # V22 = -V11,  V12 = C*exp(-D*x^2)
+  form: tanh           # "tanh": V11 = A*tanh(B*x)  (= RP_MASH tully_1ac, what the MASH runs use)
+                       # "exp":  V11 = A*(1-exp(-B*x)) x>0, -A*(1-exp(B*x)) x<0  (libra's / Tully's original)
+  A: 0.01
   B: 1.6
   C: 0.005
   D: 1.0

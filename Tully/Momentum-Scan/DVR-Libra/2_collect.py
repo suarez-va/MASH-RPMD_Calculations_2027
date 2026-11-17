@@ -6,8 +6,11 @@ momentum p0 (same observables as MASH-RPMD_Tully/analyze_tully.py).
     python3 2_collect.py                            # config.yaml
     python3 2_collect.py --config config_smoke.yaml  # results of a test scan
 
-Writes p0_grid/results.csv and p0_grid/scan.png. Points that have not finished yet are reported
-as missing rather than silently omitted, so a partial scan is obvious.
+Writes p0_grid/results.csv, a quick DVR-only p0_grid/scan.png, and scan_tully.txt in this
+directory -- the same `name = [...]` layout ../../scan_tully.py writes for the MASH dirs
+(nucP_init = p0, CRg/CTg/CRe/CTe final values, *_err = 0; no M arrays: exact dynamics has none),
+which ../figure.py reads to draw the final comparison. Points that have not finished yet are
+reported as missing rather than silently omitted, so a partial scan is obvious.
 """
 
 import os
@@ -27,6 +30,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--config", default="config.yaml", help="same config the scan was run with")
+ap.add_argument("--out", default="scan_tully.txt", help="summary file name in this directory")
 args = ap.parse_args()
 cfg_path = args.config if os.path.isabs(args.config) else os.path.join(script_dir, args.config)
 with open(cfg_path) as f:
@@ -110,6 +114,30 @@ for r in rows:
           f"{r['t_final']:>9.0f} {r['t_dyn_s']:>6.1f}s"
           + ("   [t_cross: free-particle estimate]" if r.get("t_cross_free_estimate") else ""))
 
+
+# ---------------- scan_tully.txt (same layout as ../../scan_tully.py) ----------------
+def _fmt_list(xs, fmt):
+    return "[" + ", ".join("nan" if not np.isfinite(x) else format(x, fmt) for x in xs) + "]"
+
+
+label = os.path.basename(script_dir)
+lines = [f"# {label}  (exact quantum dynamics: final C_c(t_final); no M -- exact dynamics has no "
+         f"time-dependent weights)",
+         f"# {'nucP_init':>9s} {'t_final':>9s}" + "".join(f" {k:>11s}" for k in ("CRg", "CTg", "CRe", "CTe"))]
+for r in rows:
+    lines.append(f"  {r['p0']:9g} {r['t_final']:9g}" + "".join(
+        f" {r[f'{k}_final']:11.6f}" for k in ("CRg", "CTg", "CRe", "CTe")))
+lines += ["", "nucP_init = " + _fmt_list([r["p0"] for r in rows], "g")]
+for k in ("CRg", "CTg", "CRe", "CTe"):
+    lines.append(f"{k} = " + _fmt_list([r[f"{k}_final"] for r in rows], ".6f"))
+    lines.append(f"{k}_err = " + _fmt_list([0.0 for _ in rows], "g"))
+out = os.path.join(script_dir, args.out)
+with open(out, "w") as f:
+    f.write("\n".join(lines) + "\n")
+print(f"\nwrote {out}")
+
 edge = [r["idx"] for r in rows if r["max_edge_population"] > 1e-4]
 if edge:
     print(f"\nWARNING: wavepacket reaches the grid boundary at point(s) {edge} - enlarge the grid")
+
+print("\nnext: python ../figure.py   (exact + MASH-Classical + MASH-Quantum)")

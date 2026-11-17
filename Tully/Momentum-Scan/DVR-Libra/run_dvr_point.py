@@ -1,6 +1,7 @@
 """
 Run ONE point of the momentum scan: a Gaussian wavepacket with incident momentum p0 on the Tully 1
-model (simple avoided crossing), propagated on a grid with Libra's split-operator Fourier
+model (simple avoided crossing; config `model: form:` picks the tanh form RP_MASH uses, coded below,
+or libra's original exponential form), propagated on a grid with Libra's split-operator Fourier
 transform (SOFT) solver, and save the channel-resolved populations C_Rg, C_Tg, C_Re, C_Te.
 
 This is the single-point worker invoked by 1_run_p0_scan_local.py. It is also runnable by hand
@@ -49,6 +50,96 @@ import torch
 
 import libra_py.dynamics.exact_torch.compute as compute
 from libra_py.models import Tully_for_exact_pytorch as tully
+
+
+# =================================================================================================
+# Tully 1 (simple avoided crossing), tanh form -- the potential RP_MASH runs (potential.tully_1ac):
+#
+#     V11 = A*tanh(B*x),   V22 = -V11,   V12 = V21 = C*exp(-D*x^2)
+#
+# Libra's own Tully 1 (libra_py.models.Tully_for_exact_pytorch / Tully.Tully1_py) is Tully's
+# original V11 = A*(1 - exp(-B*x)) for x > 0, -A*(1 - exp(B*x)) for x < 0: same asymptotes +-A, a
+# different shape near the crossing.  config.yaml `model: form:` picks "tanh" (this one, matches the
+# MASH runs) or "exp" (libra's).
+#
+# Two functions, as libra splits a model:
+#   tully_model1_tanh       torch, the exact_torch solver's potential_fn: Q [ndof, *grid] -> the
+#                           DIABATIC matrix [*grid, 2, 2] (diagonal + electronic coupling). This is
+#                           all the solver takes: it builds the adiabats itself (torch.linalg.eigh).
+#   tully1_matrices         numpy companion with everything else Tully.Tully1_py sets, at points x:
+#                           ham_dia, d1ham_dia (dH_dia/dx), dc1_dia (= 0, diabats do not depend on
+#                           x), plus the adiabatic energies E_adi and nonadiabatic coupling dc1_adi.
+#                           Used for the crossing-time estimate and to check the solver's adiabats.
+# =================================================================================================
+
+def tully_model1_tanh(Q, params):
+    """
+    Q: tensor [ndof, N_1, ..., N_ndof] (ndof = 1).  Returns the diabatic potential matrix
+    [N_1, ..., N_ndof, 2, 2] (complex), same format as libra's tully_model1_simple_avoided_crossing.
+    """
+    x = Q[0]
+    A = params.get("A", 0.01)
+    B = params.get("B", 1.6)
+    C = params.get("C", 0.005)
+    D = params.get("D", 1.0)
+
+    V11 = A * torch.tanh(B * x)            # diabatic state 1
+    V22 = -V11                             # diabatic state 2 (mirror)
+    V12 = C * torch.exp(-D * x**2)         # electronic coupling
+
+    Vmat = torch.zeros((*x.shape, 2, 2), dtype=torch.cfloat, device=x.device)
+    Vmat[..., 0, 0] = V11
+    Vmat[..., 1, 1] = V22
+    Vmat[..., 0, 1] = V12
+    Vmat[..., 1, 0] = torch.conj(V12)
+    return Vmat
+
+
+def tully1_matrices(x, params, form="tanh"):
+    """
+    Everything libra's Tully1_py sets, vectorized over the points x (1d array), for either form:
+
+        ham_dia   [n,2,2]  diabatic Hamiltonian          d1ham_dia [n,2,2]  d ham_dia / dx
+        dc1_dia   [n,2,2]  <dia_i|d/dx|dia_j> = 0         E_adi     [n,2]    adiabatic energies (lower, upper)
+        dc1_adi   [n,2,2]  <adi_i|d/dx|adi_j>, antisymmetric, [0,1] = d12
+
+    With V22 = -V11 the adiabats are E = -+sqrt(V11^2 + V12^2), mixing angle tan(2 theta) = V12/V11,
+    and d12 = d theta/dx = (V11 dV12 - V12 dV11) / (2 (V11^2 + V12^2)) -- its overall sign is the
+    (arbitrary) phase convention of the adiabatic eigenvectors.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    A, B, C, D = (float(params[k]) for k in ("A", "B", "C", "D"))
+    if form == "tanh":
+        V11 = A * np.tanh(B * x)
+        dV11 = A * B / np.cosh(B * x) ** 2
+    elif form == "exp":
+        e = np.exp(-B * np.abs(x))
+        V11 = np.sign(x) * A * (1.0 - e)
+        dV11 = A * B * e
+    else:
+        raise ValueError(f"model form must be 'tanh' or 'exp', got {form!r}")
+    V12 = C * np.exp(-D * x ** 2)
+    dV12 = -2.0 * D * x * V12
+
+    n = x.size
+    ham = np.zeros((n, 2, 2)); dham = np.zeros((n, 2, 2))
+    ham[:, 0, 0], ham[:, 1, 1], ham[:, 0, 1], ham[:, 1, 0] = V11, -V11, V12, V12
+    dham[:, 0, 0], dham[:, 1, 1], dham[:, 0, 1], dham[:, 1, 0] = dV11, -dV11, dV12, dV12
+    gap2 = V11 ** 2 + V12 ** 2
+    Eup = np.sqrt(gap2)
+    d12 = 0.5 * (V11 * dV12 - V12 * dV11) / gap2
+    nac = np.zeros((n, 2, 2)); nac[:, 0, 1], nac[:, 1, 0] = d12, -d12
+    return {"ham_dia": ham, "d1ham_dia": dham, "dc1_dia": np.zeros((n, 2, 2)),
+            "E_adi": np.stack([-Eup, Eup], axis=1), "dc1_adi": nac}
+
+
+def model_form(cfg):
+    return str(cfg["model"].get("form", "exp")).lower()   # no key: libra's original (old configs)
+
+
+def potential_fn(cfg):
+    """The exact_torch potential_fn for the configured form."""
+    return tully_model1_tanh if model_form(cfg) == "tanh" else tully.tully_model1_simple_avoided_crossing
 
 
 def p0_grid(cfg):
@@ -102,7 +193,7 @@ def observables(psi_dia, U, V, x, k, mass, x_split):
     return out
 
 
-def crossing_time(model, mass, x0, p0, x_split, representation, state):
+def crossing_time(model, mass, x0, p0, x_split, representation, state, form="tanh"):
     """
     Classical time for the wavepacket centre to travel from x0 to x_split with initial momentum p0
     on the adiabatic surface the wavepacket starts on:  t = int_x0^x_split  m dx / p(x),
@@ -110,10 +201,10 @@ def crossing_time(model, mass, x0, p0, x_split, representation, state):
     surface has a classical turning point before x_split (p0 too low to get there), in which case
     the free-particle time m |x_split - x0| / p0 is returned instead.
     """
-    A, B, C, D = (float(model[key]) for key in ("A", "B", "C", "D"))
     xs = np.linspace(x0, x_split, 20001)
-    V11 = np.where(xs >= 0, A * (1 - np.exp(-B * xs)), -A * (1 - np.exp(B * xs)))
-    E_up = np.sqrt(V11 ** 2 + (C * np.exp(-D * xs ** 2)) ** 2)
+    mats = tully1_matrices(xs, model, form)
+    V11 = mats["ham_dia"][:, 0, 0]
+    E_up = mats["E_adi"][:, 1]
     if representation == "adiabatic":
         upper = int(state) == 1
     else:                                   # the adiabat the initial diabatic state sits on at x0
@@ -135,7 +226,8 @@ def main():
 
     # Run length: the wavepacket centre reaches x_split at the quarter point of the simulation.
     # nsteps = 4 * t_cross / dt, rounded up to a multiple of save_every.
-    t_cross, free = crossing_time(m, mass, x0, p0, x_split, w["representation"], w["state"])
+    form = model_form(cfg)
+    t_cross, free = crossing_time(m, mass, x0, p0, x_split, w["representation"], w["state"], form)
     # Long runs: widen the snapshot interval so that at most ~max_snapshots wavefunction
     # snapshots are held in memory (the solver stores every one of them in 4 representations).
     max_snapshots = int(d.get("max_snapshots", 500))
@@ -158,7 +250,7 @@ def main():
     # libra's gaussian_wavepacket: sigma_x = 1/sqrt(2*mass*omega)
     omega = 1.0 / (2.0 * mass * sigma ** 2)
 
-    print(f"Tully 1: {model_params}", flush=True)
+    print(f"Tully 1 ({form} form): {model_params}", flush=True)
     print(f"wavepacket: x0={x0} p0={p0} sigma={sigma} mass={mass} "
           f"({w['representation']} state {w['state']})", flush=True)
     print(f"grid: [{g['x_min']}, {g['x_max']}] with {g['npts']} points;  "
@@ -172,7 +264,7 @@ def main():
         "mass": [mass],
         "dt": dt, "nsteps": nsteps, "save_every_n_steps": save_every,
         "Nstates": 2,
-        "potential_fn": tully.tully_model1_simple_avoided_crossing,
+        "potential_fn": potential_fn(cfg),
         "potential_fn_params": model_params,
         "psi0_fn": compute.gaussian_wavepacket,
         "psi0_fn_params": {"mass": [mass], "omega": [omega], "q0": [x0], "p0": [p0]},
@@ -204,6 +296,8 @@ def main():
     U = solver.eigvecs.numpy().astype(np.complex128)
     V = solver.V.numpy().astype(np.complex128)
     E_adi = solver.eigvals.numpy().astype(np.float64)
+    # the solver's adiabats (eigh of the potential_fn matrix) vs the analytic model
+    adiabat_mismatch = float(np.abs(E_adi - tully1_matrices(x, model_params, form)["E_adi"]).max())
 
     obs = observables(psi, U, V, x, k, mass, x_split)
 
@@ -224,7 +318,7 @@ def main():
 
     result = {
         "idx": args.idx,
-        "model": model_params,
+        "model": model_params, "model_form": form, "max_adiabat_mismatch": adiabat_mismatch,
         "mass": mass, "x0": x0, "p0": p0, "sigma": sigma,
         "representation": w["representation"], "state": int(w["state"]),
         "E_total": float(obs["Etot"][0]),
@@ -254,6 +348,7 @@ def main():
     if edge_pop > 1e-4:
         print("WARNING: the wavepacket reaches the grid boundary (periodic wrap-around) - "
               "enlarge the grid or shorten the run", flush=True)
+    print(f"model check: max |E_adi(solver) - E_adi(analytic)| = {adiabat_mismatch:.2e}", flush=True)
     print(f"timing: dyn {t_dyn:.1f}s", flush=True)
 
 

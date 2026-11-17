@@ -50,7 +50,7 @@ CONFIG = {
     'delt'              : 1e-3,
     'intype'            : 'spin_magnus_adaptive',
     'langevin'          : 'generalized',
-    'langevin_params'   : {'gamma': 4.0, 'Tmem': 25.0, 'Tfluc': 30.0},
+    'langevin_params'   : {'gamma': 4.0, 'Tmem': 13.6, 'Tfluc': 30.0},
     'therm_epsil'       : -100.0,
     'therm_log10_delta' : -7.0,
     'therm_time'        : 25.0,
