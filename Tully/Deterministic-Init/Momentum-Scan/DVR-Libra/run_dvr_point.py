@@ -164,7 +164,7 @@ def observables(psi_dia, U, V, x, k, mass, x_split):
     dens_adi = np.abs(psi_adi) ** 2
     dens_k = np.abs(psi_k) ** 2 * dx / npts         # sums to the norm
 
-    # Heaviside step in position with h(0) = 1/2, as in MASH-RPMD_Tully/analyze_tully.py
+    # Heaviside step in position with h(0) = 1/2, as in MASH-RPMD_Tully/analyze_transmission.py
     hR = np.where(x > x_split, 1.0, np.where(x < x_split, 0.0, 0.5))[None, :]
     rho_g, rho_e = dens_adi[:, :, 0], dens_adi[:, :, 1]     # ground / excited adiabat densities
     norm = dens_dia.sum(axis=(1, 2)) * dx

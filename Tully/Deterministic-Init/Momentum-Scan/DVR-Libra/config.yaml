@@ -21,9 +21,9 @@ wavepacket:            # psi(x,0) ~ exp(-(x-x0)^2 / (4 sigma^2)) * exp(i p0 x)
 
 grids:
   p0:                  # incident momentum, directed toward the crossing
-    start: 2.0
-    stop: 30.0         # inclusive
-    num: 27            # evenly spaced -> spacing 1.0
+    start: 1.9
+    stop: 30.1         # inclusive
+    num: 250            # evenly spaced -> spacing 1.0
 
 grid:
   x_min: -100.0
@@ -43,5 +43,5 @@ analysis:
   x_split: 0.0         # x > x_split counts as transmitted, x < x_split as reflected
 
 runtime:
-  ncores: 4            # local only: TOTAL cores; runs ncores // num_threads points at once
+  ncores: 10            # local only: TOTAL cores; runs ncores // num_threads points at once
   grid_dir: p0_grid    # output directory (relative to this folder)

@@ -1,0 +1,7 @@
+__pycache__/
+traj_grid/
+del*/
+eps*/
+*.hdf
+*.png
+*.sh

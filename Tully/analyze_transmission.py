@@ -1,7 +1,7 @@
 """
-analyze_tully.py -- channel-resolved scattering populations C_c(t) for the Tully single avoided
+analyze_transmission.py -- channel-resolved scattering populations C_c(t) for the Tully single avoided
 crossing, and their time-dependent-weight corrections M_c(t), in one streaming pass.  Output is a
-single two-panel figure (analyze_tully.png).  Built exactly like analyze_data.py (same input, weights,
+single two-panel figure (analyze_transmission.png).  Built exactly like analyze_data.py (same input, weights,
 compiled kernel, cached parallel map-reduce, block errors); only the observables differ.
 
 --- the observables --------------------------------------------------------------------------------
@@ -37,16 +37,16 @@ M_+- analyze_data.py's:
 All exactly as in analyze_data.py: --file takes a shard directory or a data.hdf; the input is cut
 into units of at most --unit-rows trajectories, each reduced by one compiled pass (_accumulate) on
 --ncores workers (default: the CPUs of the SLURM allocation, else 1) and cached in
-<file>_partials/tully_v2/; the SE is over --nblocks contiguous groups of whole units; a run without
+<file>_partials/transmission_v2/; the SE is over --nblocks contiguous groups of whole units; a run without
 /weights (an OLD run made without Tjump) is the Tjump -> infinity limit with c0 inferred from
 S_z(0) (--c0 overrides).  Current runs always write /weights, so a jump_index=[] run has one row per
 trajectory, with c0 stored, and goes through the ordinary path.
 
 Usage (from the run dir, PYTHONPATH=<RP_MASH root>):
-    python analyze_tully.py                          # reads shards/ if present, else data.hdf
-    python analyze_tully.py --file shards --ncores 16
-    python analyze_tully.py --file shards --refresh  # after changing an observable (or bump _VERSION)
-    python analyze_tully.py --file data.hdf --nblocks 20 --tmax 3000
+    python analyze_transmission.py                          # reads shards/ if present, else data.hdf
+    python analyze_transmission.py --file shards --ncores 16
+    python analyze_transmission.py --file shards --refresh  # after changing an observable (or bump _VERSION)
+    python analyze_transmission.py --file data.hdf --nblocks 20 --tmax 3000
 """
 
 import os
@@ -83,7 +83,7 @@ def jump_label(cfg):
 
 
 # Bump whenever the observables or their weights change: every cached partial is then recomputed.
-_VERSION = 'tully_v2'
+_VERSION = 'transmission_v2'
 
 
 @njit(cache=True)
@@ -228,16 +228,16 @@ def compute(path, nblocks=None, slab=None, c0=None, ncores=None, unit_rows=1000,
     cache_dir = cache_dir or default_cache_dir(path)
     parts, st = map_cached(functools.partial(_unit_partial, jumps=jumps, time=time), units,
                            cache_dir, _VERSION, ncores=ncores, refresh=refresh, use_cache=cache,
-                           tag='[tully]')
+                           tag='[transmission]')
     n_inprog = sum(not u.complete for u in units)
-    print(f'[tully] {len(units)} unit(s) of <= {unit_rows} trajectories: {st["cached"]} from cache, '
+    print(f'[transmission] {len(units)} unit(s) of <= {unit_rows} trajectories: {st["cached"]} from cache, '
           f'{st["computed"] + st["in_progress"]} computed on {ncores} worker(s) ({why})'
           + (f'; {n_inprog} unit(s) in shards still being written (never cached)' if n_inprog else '')
           + ('' if cache else '; cache off'), flush=True)
     for note in st['notes']:
-        print(f'[tully] WARNING: {note}', flush=True)
+        print(f'[transmission] WARNING: {note}', flush=True)
     if ncores == 1 and why == 'not inside a SLURM job' and st['computed'] + st['in_progress'] > 1:
-        print('[tully] NOTE: computed on ONE core. Pass --ncores N to use N cores.', flush=True)
+        print('[transmission] NOTE: computed on ONE core. Pass --ncores N to use N cores.', flush=True)
 
     used = [p for p in parts if p is not None]
     n_units = len(used)
@@ -249,7 +249,7 @@ def compute(path, nblocks=None, slab=None, c0=None, ncores=None, unit_rows=1000,
     # error bars: nblocks contiguous groups of whole units, block mean = block sum / block count
     nb = n_units if nblocks is None else max(1, min(int(nblocks), n_units))
     if nblocks is not None and int(nblocks) > n_units:
-        print(f'[tully] NOTE: only {n_units} units, so {nb} error-bar blocks instead of {nblocks}',
+        print(f'[transmission] NOTE: only {n_units} units, so {nb} error-bar blocks instead of {nblocks}',
               flush=True)
     tot = np.zeros((len(_NAMES), T))
     blk = np.zeros((len(_NAMES), nb, T))
@@ -348,7 +348,7 @@ def _main():
     ap.add_argument('--refresh', action='store_true',
                     help='recompute (and re-cache) every unit, ignoring existing partials')
     ap.add_argument('--cache-dir', default=None, help='where the partials live (default: see --no-cache)')
-    ap.add_argument('--out',     default='analyze_tully.png', help='output png')
+    ap.add_argument('--out',     default='analyze_transmission.png', help='output png')
     ap.add_argument('--ncores',  type=int, default=None,
                     help='worker processes computing units in parallel (default: the CPUs of the '
                          'SLURM allocation, else 1)')
@@ -362,29 +362,29 @@ def _main():
         r = compute(path, nblocks=a.nblocks, c0=a.c0, ncores=a.ncores, unit_rows=a.unit_rows,
                     cache=not a.no_cache, refresh=a.refresh, cache_dir=a.cache_dir)
     except RuntimeError as e:
-        raise SystemExit(f'[tully] {e}')
+        raise SystemExit(f'[transmission] {e}')
     _plot(a.out, r, tmax=a.tmax)
 
-    print(f"[tully] {path}: n_traj={r['n_traj']} from {r['n_files']} file(s) / {r['n_units']} "
+    print(f"[transmission] {path}: n_traj={r['n_traj']} from {r['n_files']} file(s) / {r['n_units']} "
           f"unit(s), nbds={r['nbds']}, nblocks={r['nblocks']}")
     if r['jumps']:
-        print(f"[tully] {r['jump_label']} full_jump={r['full_jump']}  "
+        print(f"[transmission] {r['jump_label']} full_jump={r['full_jump']}  "
               f"total jumps across all trajectories: {r['n_jumps']}")
     else:
-        print(f"[tully] no /weights table (old run, {r['jump_label']}): Tjump -> infinity, "
+        print(f"[transmission] no /weights table (old run, {r['jump_label']}): Tjump -> infinity, "
               f"W^(0) only, c0={r['c0']:g}" + (' (from --c0)' if a.c0 is not None else
                                                 ' (inferred from S_z(0))'))
     for k, name in (('CRg', 'C_Rg'), ('CTg', 'C_Tg'), ('CRe', 'C_Re'), ('CTe', 'C_Te'),
                     ('Cm', 'C_-'), ('Cp', 'C_+'),
                     ('MRg', 'M_Rg'), ('MTg', 'M_Tg'), ('MRe', 'M_Re'), ('MTe', 'M_Te'),
                     ('Mm', 'M_-'), ('Mp', 'M_+')):
-        print(f"[tully] {name:4s}(0)={r[k][0]: .6e} +/- {r[k + '_SE'][0]:.3e}   "
+        print(f"[transmission] {name:4s}(0)={r[k][0]: .6e} +/- {r[k + '_SE'][0]:.3e}   "
               f"{name:4s}(T)={r[k][-1]: .6e} +/- {r[k + '_SE'][-1]:.3e}")
-    print(f"[tully] identities: max|C_Rg + C_Tg - C_-|, |C_Re + C_Te - C_+| = {r['identity_C']:.3e}   "
+    print(f"[transmission] identities: max|C_Rg + C_Tg - C_-|, |C_Re + C_Te - C_+| = {r['identity_C']:.3e}   "
           f"M likewise = {r['identity_M']:.3e}")
     if max(r['identity_C'], r['identity_M']) > 1e-10 * max(1.0, np.abs(r['Cm']).max(), np.abs(r['Cp']).max()):
-        print('[tully] WARNING: an identity is violated beyond round-off. Something is wrong.')
-    print(f"[tully] wrote {a.out}")
+        print('[transmission] WARNING: an identity is violated beyond round-off. Something is wrong.')
+    print(f"[transmission] wrote {a.out}")
 
 
 if __name__ == '__main__':

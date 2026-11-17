@@ -3,20 +3,22 @@ The final figure of the Tully momentum scan: exact quantum dynamics vs MASH vs M
 function of the incident momentum nucP_init.  Two panels sharing the x axis:
 
     top     final channel populations C_Rg, C_Tg, C_Re, C_Te
-            (exact: lines; MASH methods: points with block standard errors)
-    bottom  max over t of |M_c(t)| for the MASH methods -- the largest correction from the
-            time-dependent weights in each channel (with the SE at that time)
+            exact: dashed lines; MASH: solid lines with the block SE as a shaded band;
+            MASH-RPMD: filled circles with error bars (the System-Bath figures' style)
+    bottom  max over t of |M_c(t)| for MASH only -- the largest correction from the
+            time-dependent weights in each channel (shaded: the SE at that time)
 
     python3 figure.py                       # -> figure.png
     python3 figure.py --logm --xlim 2 31    # log y on the M panel, fixed x window
     python3 figure.py --root /some/copy/of/Momentum-Scan --out test.png
 
-It only reads each method's scan_tully.txt, so make those first:
+It only reads each method's scan_transmission.txt, so make those first:
 
     DVR-Libra/                         python3 2_collect.py
-    MASH-Classical/ MASH-Quantum/      python ../../scan_tully.py --ncores 10   (in each dir)
+    MASH-Classical/ MASH-Quantum/      python ../../../scan_transmission.py --ncores 10   (in each dir)
 
-A method directory without a scan_tully.txt is skipped with a warning.
+A method directory without a scan_transmission.txt is skipped with a warning.  --exact DIR takes the exact
+results from elsewhere (relative to --root).
 """
 
 import os
@@ -31,16 +33,22 @@ from matplotlib.lines import Line2D
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
+# exact quantum dynamics: directory (relative to --root, override with --exact) and legend label.
+# Wigner-Init/'s copy of this script points at Deterministic-Init/'s DVR-Libra: there is one exact
+# calculation for both trees (a Gaussian wavepacket -- strictly the exact counterpart of Wigner-Init's
+# Wigner-sampled centroid).
 EXACT = ("DVR-Libra", "Exact")
-# (directory, legend label, marker, filled) of the trajectory methods
-METHODS = [("MASH-Classical", "MASH",      "o", False),
-           ("MASH-Quantum",   "MASH-RPMD", "s", True)]
-# channels, colours as analyze_tully.py
+# (directory, legend label, draw style) of the trajectory methods: "line" = solid line + SE band
+# (also drawn in the max|M| panel), "points" = circles with error bars (top panel only)
+METHODS = [("MASH-Classical", "MASH",      "line"),
+           ("MASH-Quantum",   "MASH-RPMD", "points")]
+# channels, colours as analyze_transmission.py
 CHANNELS = [("Rg", "C0"), ("Tg", "C2"), ("Re", "C1"), ("Te", "C3")]
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--root", default=script_dir, help="directory holding the method dirs (default: here)")
-ap.add_argument("--rates", default="scan_tully.txt", help="summary file name in each method dir")
+ap.add_argument("--rates", default="scan_transmission.txt", help="summary file name in each method dir")
+ap.add_argument("--exact", default=EXACT[0], help="exact (DVR) results dir, relative to --root")
 ap.add_argument("--xlim", type=float, nargs=2, default=None, metavar=("LO", "HI"))
 ap.add_argument("--logm", action="store_true", help="log y axis on the max|M| panel")
 ap.add_argument("--out", default="figure.png", help="output png (relative to --root)")
@@ -48,7 +56,7 @@ args = ap.parse_args()
 
 
 def read_scan(path):
-    """The `name = [...]` / `name = value` lines of a scan_tully.txt -> {name: array or float}."""
+    """The `name = [...]` / `name = value` lines of a scan_transmission.txt -> {name: array or float}."""
     out = {}
     with open(path) as f:
         for line in f:
@@ -77,8 +85,8 @@ def load(method):
             for k, v in s.items()}
 
 
-exact = load(EXACT[0])
-mash = [(lab, mk, fill, s) for d, lab, mk, fill in METHODS if (s := load(d)) is not None]
+exact = load(args.exact)
+mash = [(lab, style, s) for d, lab, style in METHODS if (s := load(d)) is not None]
 if exact is None and not mash:
     raise SystemExit(f"no {args.rates} in any method directory under {args.root} - nothing to plot")
 
@@ -110,30 +118,35 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 10), sharex=True,
 # --- top: final channel populations
 for ch, col in CHANNELS:
     if exact is not None and f"C{ch}" in exact:
-        ax1.plot(exact["nucP_init"], exact[f"C{ch}"], "-", color=col, lw=2.2)
-    for lab, mk, fill, s in mash:
+        ax1.plot(exact["nucP_init"], exact[f"C{ch}"], "--", color=col, lw=2.2)
+    for lab, style, s in mash:
         if f"C{ch}" not in s:
             continue
-        ax1.errorbar(s["nucP_init"], s[f"C{ch}"], s.get(f"C{ch}_err"), fmt=mk, ms=8, lw=1.5,
-                     capsize=3, color=col, mfc=col if fill else "white", mew=1.8)
+        x, y, e = s["nucP_init"], s[f"C{ch}"], s.get(f"C{ch}_err")
+        if style == "line":
+            ax1.plot(x, y, "-", color=col, lw=2.2)
+            if e is not None:
+                ax1.fill_between(x, y - e, y + e, color=col, alpha=0.2, lw=0)
+        else:
+            ax1.errorbar(x, y, e, fmt='o', markersize=6, linewidth=1.5, color=col)
 ax1.set_ylabel(r"$C_c(t_\mathrm{final})$")
 ax1.set_ylim(-0.03, 1.03)
 
-# --- bottom: max over t of |M_c(t)|
+# --- bottom: max over t of |M_c(t)|, MASH ("line" methods) only
 any_m = False
 for ch, col in CHANNELS:
-    for lab, mk, fill, s in mash:
+    for lab, style, s in mash:
         key = f"M{ch}_maxabs"
-        if key not in s:
+        if style != "line" or key not in s:
             continue
         any_m = True
-        y, e = s[key], s.get(f"{key}_err")
-        if args.logm:                      # keep error bars inside the positive axis
-            e = None if e is None else np.vstack([np.minimum(e, 0.9 * y), e])
-        ax2.errorbar(s["nucP_init"], y, e, fmt=mk + "-", ms=8, lw=1.2, capsize=3, color=col,
-                     mfc=col if fill else "white", mew=1.8)
+        x, y, e = s["nucP_init"], s[key], s.get(f"{key}_err")
+        ax2.plot(x, y, "-", color=col, lw=2.2)
+        if e is not None:
+            lo = np.maximum(y - e, 0.1 * y) if args.logm else y - e   # stay positive on a log axis
+            ax2.fill_between(x, lo, y + e, color=col, alpha=0.2, lw=0)
 if not any_m:
-    ax2.text(0.5, 0.5, "no M data (no MASH scan_tully.txt)", ha="center", va="center",
+    ax2.text(0.5, 0.5, "no M data (no MASH-Classical scan_transmission.txt)", ha="center", va="center",
              transform=ax2.transAxes, fontsize=14, color="0.4")
 ax2.axhline(0.0, color="0.7", lw=0.8, ls="--")
 if args.logm and any_m:
@@ -147,10 +160,13 @@ if args.xlim is not None:
 ch_handles = [Line2D([], [], color=col, lw=6, label=f"$C_{{{ch}}}$") for ch, col in CHANNELS]
 m_handles = []
 if exact is not None:
-    m_handles.append(Line2D([], [], color="k", lw=2.2, label=EXACT[1]))
-for lab, mk, fill, _ in mash:
-    m_handles.append(Line2D([], [], color="k", marker=mk, ls="none", ms=8, mew=1.8,
-                            mfc="k" if fill else "white", label=lab))
+    m_handles.append(Line2D([], [], color="k", lw=2.2, ls="--", label=EXACT[1]))
+for lab, style, _ in mash:
+    if style == "line":
+        m_handles.append(Line2D([], [], color="k", lw=2.2, label=lab))
+    else:
+        m_handles.append(ax1.errorbar([], [], [], fmt='o', markersize=6, linewidth=1.5, color="k",
+                                      label=lab))
 # both legends sit just above the top panel, clear of the data
 leg = ax1.legend(handles=ch_handles, loc="lower left", bbox_to_anchor=(0.0, 1.0), ncol=4,
                  handlelength=1.2, borderaxespad=0.2)

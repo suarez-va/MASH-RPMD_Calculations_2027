@@ -1,10 +1,10 @@
 """
-scan_tully.py -- analysis of a whole Tully momentum scan: for every scan point (nucP_*/) of one or
-more method dirs, run analyze_tully.py in-process, write the point's analyze_tully.png into the
+scan_transmission.py -- analysis of a whole Tully momentum scan: for every scan point (nucP_*/) of one or
+more method dirs, run analyze_transmission.py in-process, write the point's analyze_transmission.png into the
 point dir exactly as that script does, and collect the FINAL values (at the point's last time) of the
 four channel populations C_Rg, C_Tg, C_Re, C_Te with their block standard errors.
 
-Per method dir it prints a table and copy-pasteable arrays, and saves both to <method_dir>/scan_tully.txt:
+Per method dir it prints a table and copy-pasteable arrays, and saves both to <method_dir>/scan_transmission.txt:
 
     nucP_init = [5, 6, ...]
     CRg = [...]    CRg_err = [...]
@@ -17,8 +17,8 @@ Per method dir it prints a table and copy-pasteable arrays, and saves both to <m
 The per-unit partials are cached as usual (<shards>_partials/), so a re-run only does new shards.
 
 Usage (PYTHONPATH=<RP_MASH root>):
-    python scan_tully.py Momentum-Scan/*/ --ncores 10
-    cd Momentum-Scan/MASH-Classical && python ../../scan_tully.py --ncores 10
+    python scan_transmission.py Momentum-Scan/*/ --ncores 10
+    cd Momentum-Scan/MASH-Classical && python ../../scan_transmission.py --ncores 10
 """
 
 import os
@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
 
-import analyze_tully
+import analyze_transmission
 
 
 _POINT_RE = re.compile(r'^nucP_(.+)$')
@@ -59,8 +59,8 @@ def analyze_point(point_dir, a):
         path = os.path.join(point_dir, 'data.hdf')
         if not os.path.isfile(path):
             raise RuntimeError(f'no shards/ or data.hdf in {point_dir}')
-    r = analyze_tully.compute(path, nblocks=a.nblocks, ncores=a.ncores, refresh=a.refresh)
-    analyze_tully._plot(os.path.join(point_dir, 'analyze_tully.png'), r, tmax=a.tmax)
+    r = analyze_transmission.compute(path, nblocks=a.nblocks, ncores=a.ncores, refresh=a.refresh)
+    analyze_transmission._plot(os.path.join(point_dir, 'analyze_transmission.png'), r, tmax=a.tmax)
     return r
 
 
@@ -122,14 +122,14 @@ def run_method(method_dir, a):
 
 
 def _main():
-    ap = argparse.ArgumentParser(description='Run analyze_tully over every nucP_* point of the given '
+    ap = argparse.ArgumentParser(description='Run analyze_transmission over every nucP_* point of the given '
                                              'method dirs and collect the final channel populations.')
     ap.add_argument('dirs', nargs='*', default=['.'], help='method dirs (default: .)')
     ap.add_argument('--ncores',  type=int, default=None, help='worker processes (default: SLURM CPUs, else 1)')
     ap.add_argument('--nblocks', type=int, default=100, help='trajectory blocks (default 100)')
     ap.add_argument('--tmax',    type=float, default=None, help='truncate the PLOTS to t <= tmax')
     ap.add_argument('--refresh', action='store_true', help='recompute every cached partial')
-    ap.add_argument('--out',     default='scan_tully.txt', help='summary file name in each method dir')
+    ap.add_argument('--out',     default='scan_transmission.txt', help='summary file name in each method dir')
     ap.add_argument('-v', '--verbose', action='store_true', help='print tracebacks of failed points')
     a = ap.parse_args()
     for d in a.dirs:

@@ -11,7 +11,7 @@ system:
   Omega: 4.00                      # Brownian oscillator frequency   [1/beta]
   Gamma: 4.00                      # Brownian oscillator damping     [1/beta]
   Lambda: 12.0                     # reorganization energy scale     [1/beta]
-  log10_Delta: -1.4                # electronic coupling: Delta = 10**(log10_Delta) / beta
+  log10_Delta: -1.0                # electronic coupling: Delta = 10**(log10_Delta) / beta
 
 grids:
   epsilon:             # driving force beta*epsilon

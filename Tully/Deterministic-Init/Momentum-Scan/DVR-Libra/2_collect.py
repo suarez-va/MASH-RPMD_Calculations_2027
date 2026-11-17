@@ -1,13 +1,13 @@
 """
 Collect the per-point result.json files into one table and plot the four channel-resolved
 populations at the end of each run, C_Rg, C_Tg, C_Re, C_Te, as a function of the incident
-momentum p0 (same observables as MASH-RPMD_Tully/analyze_tully.py).
+momentum p0 (same observables as MASH-RPMD_Tully/analyze_transmission.py).
 
     python3 2_collect.py                            # config.yaml
     python3 2_collect.py --config config_smoke.yaml  # results of a test scan
 
-Writes p0_grid/results.csv, a quick DVR-only p0_grid/scan.png, and scan_tully.txt in this
-directory -- the same `name = [...]` layout ../../scan_tully.py writes for the MASH dirs
+Writes p0_grid/results.csv, a quick DVR-only p0_grid/scan.png, and scan_transmission.txt in this
+directory -- the same `name = [...]` layout ../../../scan_transmission.py writes for the MASH dirs
 (nucP_init = p0, CRg/CTg/CRe/CTe final values, *_err = 0; no M arrays: exact dynamics has none),
 which ../figure.py reads to draw the final comparison. Points that have not finished yet are
 reported as missing rather than silently omitted, so a partial scan is obvious.
@@ -30,7 +30,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--config", default="config.yaml", help="same config the scan was run with")
-ap.add_argument("--out", default="scan_tully.txt", help="summary file name in this directory")
+ap.add_argument("--out", default="scan_transmission.txt", help="summary file name in this directory")
 args = ap.parse_args()
 cfg_path = args.config if os.path.isabs(args.config) else os.path.join(script_dir, args.config)
 with open(cfg_path) as f:
@@ -95,7 +95,7 @@ plt.rcParams.update({
 fig, (ax1) = plt.subplots(1, 1, figsize=(6, 4))
 ax1.set_ylabel('$C(t_\\mathrm{final})$')
 ax1.set_xlabel('$p_0$ (a.u.)')
-# same colours as MASH-RPMD_Tully/analyze_tully.py
+# same colours as MASH-RPMD_Tully/analyze_transmission.py
 for key, col, lab in (("CRg_final", "C0", "$C_{Rg}$"), ("CTg_final", "C2", "$C_{Tg}$"),
                       ("CRe_final", "C1", "$C_{Re}$"), ("CTe_final", "C3", "$C_{Te}$")):
     ax1.plot(p0, [r[key] for r in rows], "o-", markersize=4, lw=1.5, color=col, label=lab)
@@ -115,7 +115,7 @@ for r in rows:
           + ("   [t_cross: free-particle estimate]" if r.get("t_cross_free_estimate") else ""))
 
 
-# ---------------- scan_tully.txt (same layout as ../../scan_tully.py) ----------------
+# ---------------- scan_transmission.txt (same layout as ../../../scan_transmission.py) ----------------
 def _fmt_list(xs, fmt):
     return "[" + ", ".join("nan" if not np.isfinite(x) else format(x, fmt) for x in xs) + "]"
 
