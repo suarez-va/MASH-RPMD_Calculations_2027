@@ -1,6 +1,7 @@
 """
-Tully 1 (single avoided crossing) momentum scan, MASH-RPMD.  Centroid starts exactly at
-(nucR_init, nucP_init) (centroid_init = 'deterministic'); internal ring-polymer modes thermal at beta. One trajectory runs every
+Tully 1 (single avoided crossing) momentum scan, MASH-RPMD.  Centroid Wigner-sampled from a
+Gaussian wavepacket of width sigma_init around (nucR_init, nucP_init) (centroid_init = 'wigner'), the
+DVR-Libra initial state; internal ring-polymer modes thermal at beta. One trajectory runs every
 nucP_init in `nucP_init_scan`, point v landing in nucP_<v>/shards/ (see ../../../transmission_scan.py).
 
     python -m workflow.runner --config config.py                             # Local
@@ -19,8 +20,8 @@ CONFIG = {
 
     'slurm': {
         'max_tasks'     : 100,
-        'job_name'      : 'MASH',
-        'time'          : '29:00:00',
+        'job_name'      : 'MASHRPMD',
+        'time'          : '39:00:00',
         'cpus_per_task' : 10,
         'max_concurrent': None,
         'partition'     : None,
@@ -44,18 +45,19 @@ CONFIG = {
     'nnuc'              : 1,
     'nstates'           : 2,
     'mass'              : [2000.0],              # mass
-    'beta'              : 1.0,                   # inverse temperature (ring-polymer springs only)
+    'beta'              : 100.0,                   # inverse temperature (ring-polymer springs only)
     'A'                 : 0.01,
     'B'                 : 1.6,
     'C'                 : 0.005,
     'D'                 : 1.0,
 
     # ------------------------------------------------------------------ initial state + scan
-    'centroid_init'     : 'deterministic',       # centroid exactly at (nucR_init, nucP_init)
+    'centroid_init'     : 'wigner',              # centroid ~ Wigner of the Gaussian wavepacket
+    'sigma_init'        : 1.0,                   # wavepacket width (= DVR-Libra sigma): R ~ N(nucR_init, sigma), P ~ N(nucP_init, 1/(2 sigma))
     'nucR_init'         : -10.0,                 # start left of the crossing at R = 0
     'nucP_init_scan'    : [1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9,
                            3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9,
-                           4.0, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9,
+                           4.0, 4.1, 4.2, 4.3, 4.4, 4.472, 4.473, 4.5, 4.6, 4.7, 4.8, 4.9,
                            5.0, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9,
                            6.0, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9,
                            7.0, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9,
@@ -85,5 +87,5 @@ CONFIG = {
     # ------------------------------------------------------------------ integrator
     'delt'              : 1.0,
     'intype'            : 'spin_magnus_adaptive',
-    'Nprint'            : 5,
+    'Nprint'            : 25,
 }

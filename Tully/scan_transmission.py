@@ -16,15 +16,38 @@ Per method dir it prints a table and copy-pasteable arrays, and saves both to <m
 
 The per-unit partials are cached as usual (<shards>_partials/), so a re-run only does new shards.
 
+--- running the scan in batches (shards deleted between batches) ---------------------------------
+
+Every analysed point also saves its result to <point dir>/transmission.npz: the full C_c(t), M_c(t)
+time series with their SEs, n_traj, nbds, nblocks (~1 MB). A point whose shards/ (or data.hdf) is
+gone is read back from that file instead, so scan_transmission.txt always covers EVERY point analysed
+so far, whichever batch it came from -- there is no separate accumulate step. Per batch:
+
+    1. config.py: leave only this batch's momenta in nucP_init_scan (comment out the rest)
+    2. run it (workflow.runner / workflow.slurm + sbatch) and wait until it has finished
+    3. python ../../../scan_transmission.py --ncores 10 --delete-shards
+       -> analyses the batch, writes transmission.npz + analyze_transmission.png in each point dir,
+          rewrites scan_transmission.txt over all points, then deletes shards/ and shards_partials/
+          of every point that was just analysed from COMPLETE shards (n_traj reached the config's
+          n_traj). An incomplete point keeps its shards (with a warning) and is redone next time.
+    4. next batch
+
+Without --delete-shards nothing is deleted (delete by hand once transmission.npz exists). A point
+that still has shards is always re-analysed from them and its transmission.npz rewritten;
+--saved-only skips that and just rebuilds the summary from the saved files.
+
 Usage (PYTHONPATH=<RP_MASH root>):
     python scan_transmission.py Momentum-Scan/*/ --ncores 10
     cd Momentum-Scan/MASH-Classical && python ../../scan_transmission.py --ncores 10
+    python ../../../scan_transmission.py --ncores 10 --delete-shards     # batch mode, see above
 """
 
 import os
 import re
 import sys
 import glob
+import json
+import shutil
 import argparse
 import traceback
 
@@ -53,15 +76,75 @@ def scan_points(method_dir):
     return sorted(pts)
 
 
-def analyze_point(point_dir, a):
-    path = os.path.join(point_dir, 'shards')
-    if not os.path.isdir(path):
-        path = os.path.join(point_dir, 'data.hdf')
-        if not os.path.isfile(path):
-            raise RuntimeError(f'no shards/ or data.hdf in {point_dir}')
-    r = analyze_transmission.compute(path, nblocks=a.nblocks, ncores=a.ncores, refresh=a.refresh)
-    analyze_transmission._plot(os.path.join(point_dir, 'analyze_transmission.png'), r, tmax=a.tmax)
+SAVED = 'transmission.npz'                 # per-point result, survives deleting the shards
+_SERIES = analyze_transmission._NAMES
+_SCALARS = ('n_traj', 'nbds', 'nblocks', 'n_jumps', 'jump_label')
+
+
+def _save_point(path, r, n_traj_cfg):
+    tmp = path + '.tmp.npz'                  # written whole, then renamed: never a half file
+    np.savez(tmp, time=r['time'], n_traj_cfg=np.int64(n_traj_cfg),
+             **{k: r[k] for k in _SERIES}, **{k + '_SE': r[k + '_SE'] for k in _SERIES},
+             **{k: np.asarray(r[k]) for k in _SCALARS})
+    os.replace(tmp, path)
+
+
+def _load_point(path):
+    with np.load(path) as z:
+        r = {k: z[k] for k in z.files}
+    for k in _SCALARS + ('n_traj_cfg',):
+        r[k] = r[k].item()
     return r
+
+
+def _source(point_dir):
+    """shards/ or data.hdf of a point, or None if the raw data is gone."""
+    for name, ok in (('shards', os.path.isdir), ('data.hdf', os.path.isfile)):
+        p = os.path.join(point_dir, name)
+        if ok(p):
+            return p
+    return None
+
+
+def _config_n_traj(path):
+    """n_traj the run was configured for (config_json of the first shard / data.hdf)."""
+    f0 = path if os.path.isfile(path) else sorted(glob.glob(os.path.join(path, '*.hdf')))[0]
+    with analyze_transmission.open_readonly(f0) as f:
+        return int(json.loads(f.attrs['config_json'])['n_traj'])
+
+
+def analyze_point(point_dir, a):
+    """(result dict, 'shards' | 'saved'): from the raw data if it is still there (and the result is
+    saved to transmission.npz), else from transmission.npz."""
+    path, saved = _source(point_dir), os.path.join(point_dir, SAVED)
+    if path is not None and not a.saved_only:
+        r = analyze_transmission.compute(path, nblocks=a.nblocks, ncores=a.ncores, refresh=a.refresh)
+        analyze_transmission._plot(os.path.join(point_dir, 'analyze_transmission.png'), r, tmax=a.tmax)
+        r['n_traj_cfg'] = _config_n_traj(path)
+        _save_point(saved, r, r['n_traj_cfg'])
+        return r, 'shards'
+    if os.path.isfile(saved):
+        return _load_point(saved), 'saved'
+    raise RuntimeError(f'no shards/, data.hdf or {SAVED} in {point_dir}'
+                       + (' (--saved-only)' if path is not None else ''))
+
+
+def delete_shards(point_dir, r):
+    """After a successful analysis from COMPLETE shards: remove shards/ and shards_partials/."""
+    if r['n_traj'] < r['n_traj_cfg']:
+        print(f"[scan]     NOT deleting shards: only {r['n_traj']} of {r['n_traj_cfg']} trajectories "
+              f"(still running, or failed trajectories?)", flush=True)
+        return
+    if not os.path.isfile(os.path.join(point_dir, SAVED)):    # belt and braces
+        raise RuntimeError(f'{SAVED} missing in {point_dir}: refusing to delete the shards')
+    gone = []
+    for name in ('shards', 'shards_partials'):
+        p = os.path.join(point_dir, name)
+        if os.path.isdir(p):
+            shutil.rmtree(p)
+            gone.append(name + '/')
+    if gone:
+        print(f"[scan]     deleted {' and '.join(gone)} (result kept in {SAVED})", flush=True)
 
 
 def _fmt_list(xs, fmt):
@@ -81,7 +164,9 @@ def run_method(method_dir, a):
     for v, d in pts:
         print(f'[scan] --- {os.path.basename(d)}', flush=True)
         try:
-            r = analyze_point(d, a)
+            r, src = analyze_point(d, a)
+            if src == 'saved':
+                print(f'[scan]     from {SAVED} (no shards)', flush=True)
             fin = {k: (float(r[k][-1]), float(r[k + '_SE'][-1])) for k in _KEYS}
             for k in _MKEYS:                       # max over time of |M_c(t)|, SE at that time
                 i = int(np.nanargmax(np.abs(r[k])))
@@ -91,6 +176,8 @@ def run_method(method_dir, a):
                   + f'  (n_traj={r["n_traj"]})', flush=True)
             print('[scan]     ' + '  '.join(f'max|{k}|={fin[k][0]:.3e}+/-{fin[k][1]:.1e}' for k in _MKEYS),
                   flush=True)
+            if a.delete_shards and src == 'shards':
+                delete_shards(d, r)
         except Exception as e:
             print(f'[scan]     FAILED: {e}', flush=True)
             if a.verbose:
@@ -101,7 +188,7 @@ def run_method(method_dir, a):
         f' {k:>11s} {k + "_err":>11s}' for k in _KEYS) + ''.join(
         f' {"max|" + k + "|":>11s} {"err":>9s}' for k in _MKEYS)
     lines = [f'# {label}  (final values C(T); max over t of |M(t)|, err = SE at that t; '
-             f'nblocks={a.nblocks})', head]
+             f'nblocks as saved per point, {a.nblocks} for the points analysed in this run)', head]
     for v, n, T, fin in rows:
         lines.append(f'  {v:9g} {n:9d} {T:8g}' + ''.join(
             f' {fin[k][0]:11.6f} {fin[k][1]:11.6f}' for k in _KEYS) + ''.join(
@@ -130,6 +217,11 @@ def _main():
     ap.add_argument('--tmax',    type=float, default=None, help='truncate the PLOTS to t <= tmax')
     ap.add_argument('--refresh', action='store_true', help='recompute every cached partial')
     ap.add_argument('--out',     default='scan_transmission.txt', help='summary file name in each method dir')
+    ap.add_argument('--delete-shards', action='store_true',
+                    help='after analysing a point from COMPLETE shards (and saving transmission.npz), '
+                         'delete its shards/ and shards_partials/ (batch mode)')
+    ap.add_argument('--saved-only', action='store_true',
+                    help='do not analyse any shards: rebuild the summary from transmission.npz only')
     ap.add_argument('-v', '--verbose', action='store_true', help='print tracebacks of failed points')
     a = ap.parse_args()
     for d in a.dirs:

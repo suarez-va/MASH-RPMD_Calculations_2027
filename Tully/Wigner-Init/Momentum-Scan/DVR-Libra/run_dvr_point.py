@@ -8,6 +8,7 @@ This is the single-point worker invoked by 1_run_p0_scan_local.py. It is also ru
 for debugging a single value:
 
     python3 run_dvr_point.py --idx 6
+    python3 run_dvr_point.py --idx 6 --save-dens   # also keep the densities for plot_dens_movie.py
 
 Everything physical comes from config.yaml. The only thing that varies across the scan is p0 (and
 with it the run length: nsteps is chosen so that the wavepacket centre reaches analysis.x_split
@@ -33,6 +34,10 @@ if __name__ == "__main__":
     ap.add_argument("--config", default=None)
     ap.add_argument("--num-threads", type=int, default=None,
                     help="cores for this point (default: dyn.num_threads from the config)")
+    ap.add_argument("--save-dens", action="store_true",
+                    help="also write densities.npz: the ground/excited adiabatic nuclear densities "
+                         "|psi_g(x,t)|^2, |psi_e(x,t)|^2 at every snapshot (for plot_dens_movie.py; "
+                         "~30 MB, so off in the scan)")
     args = ap.parse_args()
 
     cfg_path = args.config or os.path.join(script_dir, "config.yaml")
@@ -305,6 +310,12 @@ def main():
     np.savez("dynamics.npz", t=t_ar,
              mass=mass, x0=x0, p0=p0, sigma=sigma, dt=dt, nsteps=nsteps, x_split=x_split,
              **model_params, **{key: val for key, val in obs.items() if not key.startswith("dens_")})
+
+    if args.save_dens:
+        np.savez("densities.npz", t=t_ar, x=x, rho_g=obs["dens_adi"][:, :, 0],
+                 rho_e=obs["dens_adi"][:, :, 1], mass=mass, x0=x0, p0=p0, sigma=sigma,
+                 x_split=x_split, Cm=obs["Cm"], Cp=obs["Cp"], norm=obs["norm"])
+        print(f"densities -> {os.path.join(outdir, 'densities.npz')}", flush=True)
 
     # Is anything close to the (periodic) grid boundary? Check the outer 5% on each side.
     nedge = max(1, x.size // 20)

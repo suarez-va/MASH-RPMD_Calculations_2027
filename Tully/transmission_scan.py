@@ -7,8 +7,9 @@ scan_points(cfg): build the ring polymer's initial state (below: thermal interna
 or Wigner-sampled around (nucR_init, nucP_init of that point)), sample the spin in the lower hemisphere
 (init_map_spin(0): the particle enters on the lower adiabat), and propagate microcanonically (no
 thermostat), writing the point's .dat files into the subdirectory <name>/ of the trajectory's work
-dir.  The run length is per point (see n_steps): twice the free-particle time to reach R = 0,
-ceil(2 |nucR_init| mass / (nucP_init delt)) steps, unless the config sets `traj_time`, which then
+dir.  The run length is per point (see n_steps): run_time_factor (default 2) times the free-particle
+time to reach R = 0, ceil(f |nucR_init| mass / (nucP_init delt)) steps, unless the config sets
+`traj_time`, which then
 applies to every point.
 
 Analysis of the whole scan: scan_transmission.py next to this file (analyze_transmission.py on every point).
@@ -185,12 +186,16 @@ def _build(cfg, nucR, nucP, dyn_seed):
 def n_steps(cfg, nucP_init):
     """
     Production steps of one scan point.  With `traj_time` in the config: round(traj_time/delt), the
-    same for every point.  Without it: TWICE the free-particle time to reach the crossing at R = 0,
+    same for every point.  Without it: `run_time_factor` f (default 2) times the free-particle time
+    to reach the crossing at R = 0,
 
-        t_0 = |nucR_init| / v = |nucR_init| * mass / nucP_init,   Nprod = ceil(2 t_0 / delt),
+        t_0 = |nucR_init| / v = |nucR_init| * mass / nucP_init,   Nprod = ceil(f t_0 / delt),
 
     so slow points run longer and fast ones are not wasted (e.g. nucR_init = -10, mass = 2000,
-    delt = 5: P = 5 -> 1600 steps (8000 a.u.), P = 30 -> 267 steps).
+    delt = 5, f = 2: P = 5 -> 1600 steps (8000 a.u.), P = 30 -> 267 steps).  A Wigner-sampled
+    centroid starts farther back / slower than the mean in part of the runs; checked for Wigner
+    MASH-Classical (sigma_init = 1) just above the lower-adiabat barrier, P = 4.5-6: f = 4 instead of
+    2 changed the transmission by <= 3e-4, so the default is long enough there.
     """
     delt = float(cfg['delt'])
     if cfg.get('traj_time') is not None:
@@ -198,7 +203,10 @@ def n_steps(cfg, nucP_init):
     mass = float(np.atleast_1d(cfg['mass'])[0])
     if float(nucP_init) <= 0.0:
         raise ValueError(f'automatic run length needs nucP_init > 0 (got {nucP_init}); set traj_time')
-    return int(np.ceil(2.0 * abs(float(cfg['nucR_init'])) * mass / (float(nucP_init) * delt)))
+    f = float(cfg.get('run_time_factor', 2.0))
+    if f <= 0.0:
+        raise ValueError(f'run_time_factor must be > 0 (got {f})')
+    return int(np.ceil(f * abs(float(cfg['nucR_init'])) * mass / (float(nucP_init) * delt)))
 
 
 def run_trajectory(cfg, seed, idx=None, run_dir=None):
