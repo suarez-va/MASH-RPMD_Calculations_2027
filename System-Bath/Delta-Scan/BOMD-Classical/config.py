@@ -10,12 +10,12 @@ CONFIG = {
     'ncores'      : 10,                         # local cores for `python -m workflow.runner`
     'shard_size'  : 100,                        # trajectories per shards/shard_<s>.hdf (None -> one dir per trajectory)
     'shard_dir'   : 'shards',
-    'system_file' : '../../../therm_scan.py',
+    'system_file' : '../../therm_scan.py',
     'grid_dir'    : 'traj_grid',
 
     'slurm': {
         'max_tasks'     : 250,
-        'job_name'      : 'MASH',
+        'job_name'      : 'BOMD',
         'time'          : '39:00:00',
         'cpus_per_task' : 10,
         'max_concurrent': None,
@@ -30,10 +30,11 @@ CONFIG = {
     },
 
     # ------------------------------------------------------------------ dynamics
+    'dynamics'          : 'bo',                  # Born-Oppenheimer on the lower adiabat
     'nbds'              : 1,                     # number of ring-polymer beads
-    'jump_index'        : [],                    # unused
-    'jump_gap'          : None,                  # jump once on leaving |V1 - V0| < Egap; None = off
-    'full_jump'         : False,                 # half sphere sample 
+    'jump_index'        : [],                    # unused by BO
+    'jump_gap'          : None,                  # unused by BO
+    'full_jump'         : False,                 # unused by BO
 
     # ----------------------------------------------------------------- Marcus ET model
     'nnuc'              : 1,

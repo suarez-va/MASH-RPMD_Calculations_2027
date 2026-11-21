@@ -15,8 +15,8 @@ system:
 
 grids:
   epsilon:             # driving force beta*epsilon
-    start: -1.5
-    stop: 31.5         # exclusive -> 0, 1, ..., 30
+    start: -1.0
+    stop: 31.0         # exclusive -> 0, 1, ..., 30
     step: 0.5
 
 heom:

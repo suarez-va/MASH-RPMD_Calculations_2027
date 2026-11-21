@@ -21,7 +21,7 @@ CONFIG = {
         'max_concurrent': None,
         'partition'     : None,
         'account'       : 'gts-jkretchmer3-chemx',
-        'mem_per_cpu'   : '8GB', 
+        'mem_per_cpu'   : '16GB', 
         'python'        : 'python',
         'extra_directives': [],
         'extra_commands': [
@@ -50,6 +50,7 @@ CONFIG = {
 
     # ------------------------------------------------------------------ thermostat + integrator
     'delt'              : 2e-4,
+    #'delt'              : 1e-4,
     'intype'            : 'spin_magnus_adaptive',
     'langevin'          : 'generalized',
     'langevin_params'   : {'gamma': 4.0, 'Tmem': 13.6, 'Tfluc': 100.0},
