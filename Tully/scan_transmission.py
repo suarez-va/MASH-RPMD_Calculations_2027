@@ -36,6 +36,12 @@ Without --delete-shards nothing is deleted (delete by hand once transmission.npz
 that still has shards is always re-analysed from them and its transmission.npz rewritten;
 --saved-only skips that and just rebuilds the summary from the saved files.
 
+Points can be added at any time (e.g. lower / higher momenta): the summary is built from every nucP_*/
+present, shards or transmission.npz, sorted by momentum. A point read from transmission.npz gets its
+analyze_transmission.png redrawn only if the png is missing, or for all of them with --replot (e.g.
+--replot --tmax 3000). NOTE: keep finished momenta out of nucP_init_scan -- the runner sees no shards
+in their dirs and would run them again from scratch.
+
 Usage (PYTHONPATH=<RP_MASH root>):
     python scan_transmission.py Momentum-Scan/*/ --ncores 10
     cd Momentum-Scan/MASH-Classical && python ../../scan_transmission.py --ncores 10
@@ -124,7 +130,11 @@ def analyze_point(point_dir, a):
         _save_point(saved, r, r['n_traj_cfg'])
         return r, 'shards'
     if os.path.isfile(saved):
-        return _load_point(saved), 'saved'
+        r = _load_point(saved)
+        png = os.path.join(point_dir, 'analyze_transmission.png')
+        if a.replot or not os.path.isfile(png):           # the saved series are all the plot needs
+            analyze_transmission._plot(png, r, tmax=a.tmax)
+        return r, 'saved'
     raise RuntimeError(f'no shards/, data.hdf or {SAVED} in {point_dir}'
                        + (' (--saved-only)' if path is not None else ''))
 
@@ -222,6 +232,9 @@ def _main():
                          'delete its shards/ and shards_partials/ (batch mode)')
     ap.add_argument('--saved-only', action='store_true',
                     help='do not analyse any shards: rebuild the summary from transmission.npz only')
+    ap.add_argument('--replot', action='store_true',
+                    help='redraw analyze_transmission.png of points read from transmission.npz (e.g. with a '
+                         'new --tmax); without it only a missing png is redrawn')
     ap.add_argument('-v', '--verbose', action='store_true', help='print tracebacks of failed points')
     a = ap.parse_args()
     for d in a.dirs:
