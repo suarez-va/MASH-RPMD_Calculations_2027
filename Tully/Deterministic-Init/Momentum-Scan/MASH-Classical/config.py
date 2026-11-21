@@ -58,22 +58,22 @@ CONFIG = {
     'nucP_init_scan'    : [1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9,
                            3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9,
                            4.0, 4.1, 4.2, 4.3, 4.4],   # incident momenta
-    'run_time_factor'   : 1.5,
+    'run_time_factor'   : 2.0,
 
     # Batch 2
-    #'nucP_init_scan'    : [4.472, 4.473, 4.5, 4.6, 4.7, 4.8, 4.9],   # incident momenta
-    #'run_time_factor'   : 3.0,
+    #'nucP_init_scan'    : [4.473, 4.5, 4.6, 4.7, 4.8, 4.9],   # incident momenta
+    #'run_time_factor'   : 5.0,
 
     # Batch 3
     #'nucP_init_scan'    : [5.0, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9,
     #                       6.0, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9,
     #                       7.0, 7.1, 7.2, 7.3, 7.4, 7.5],   # incident momenta
-    #'run_time_factor'   : 1.5,
+    #'run_time_factor'   : 2.0,
 
     # Batch 4
-    #'nucP_init_scan'    : [7.6, 7.7, 7.8, 7.9,
+    #'nucP_init_scan'    : [7.6, 7.7, 7.746, 7.8, 7.9,
     #                       8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9],   # incident momenta
-    #'run_time_factor'   : 5.0,
+    #'run_time_factor'   : 10.0,
 
     # Batch 5
     #'nucP_init_scan'    : [9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9,
@@ -97,10 +97,10 @@ CONFIG = {
     #                       27.0, 27.1, 27.2, 27.3, 27.4, 27.5, 27.6, 27.7, 27.8, 27.9, 
     #                       28.0, 28.1, 28.2, 28.3, 28.4, 28.5, 28.6, 28.7, 28.8, 28.9, 
     #                       29.0, 29.1, 29.2, 29.3, 29.4, 29.5, 29.6, 29.7, 29.8, 29.9,  30.0, 30.1],   # incident momenta
-    #'run_time_factor'   : 1.5,
+    #'run_time_factor'   : 2.0,
 
     # ------------------------------------------------------------------ integrator
     'delt'              : 1.0,
     'intype'            : 'spin_magnus_adaptive',
-    'Nprint'            : 1,
+    'Nprint'            : 5,
 }
