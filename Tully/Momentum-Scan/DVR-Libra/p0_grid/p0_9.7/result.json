@@ -1,0 +1,51 @@
+{
+  "point": "p0_9.7",
+  "run_time_factor": 16.0,
+  "t0": 1795313702.2717795,
+  "x_min": -228.425,
+  "x_max": 228.4,
+  "model": {
+    "A": 0.01,
+    "B": 1.6,
+    "C": 0.005,
+    "D": 1.0
+  },
+  "model_form": "tanh",
+  "max_adiabat_mismatch": 1.8569989365668782e-09,
+  "mass": 2000.0,
+  "x0": -10.0,
+  "p0": 9.7,
+  "sigma": 1.0,
+  "representation": "diabatic",
+  "state": 0,
+  "E_total": 0.013593199179369268,
+  "t_final": 33000.0,
+  "pop_adi_final": [
+    0.7688735128503721,
+    0.21216900076013548
+  ],
+  "pop_dia_final": [
+    0.21645133591010163,
+    0.7645911776939527
+  ],
+  "CRg_final": 0.004929368548495574,
+  "CTg_final": 0.7639441443018742,
+  "CRe_final": 0.0006680039856994367,
+  "CTe_final": 0.2115009967744356,
+  "x_avg_final": 128.79041345887373,
+  "p_avg_final": 8.32864207237159,
+  "norm_final": 0.9810425136040517,
+  "max_norm_drift": 0.018713408878533344,
+  "max_energy_drift": 0.0002546468513758924,
+  "max_edge_population": 7.394967104196358e-07,
+  "high_k_population_final": 2.8826731416204625e-10,
+  "npts": 18274,
+  "dx": 0.024993896484375,
+  "k_max": 125.69438934326172,
+  "dt": 0.5,
+  "nsteps": 66000,
+  "t_cross": 2075.495419744927,
+  "t_cross_free_estimate": false,
+  "method": "split-operator",
+  "t_dyn_s": 434.37766337394714
+}
