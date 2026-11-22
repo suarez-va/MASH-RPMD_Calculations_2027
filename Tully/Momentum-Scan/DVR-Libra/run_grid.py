@@ -2,8 +2,9 @@
 Grid helpers shared by the local driver (1_run_*_local.py) and the SLURM driver
 (1_submit_*_slurm.py):
 
-  - prepare_grid      : create the grid directory + val<idx>/ subdirs, write vals.txt and decide
-                        which indices still need running (skip finished ones unless --force)
+  - prepare_grid      : create the grid directory + one subdir per point (named by the caller,
+                        e.g. p0_4.5/) and decide which still need running (skip finished ones
+                        unless --force)
   - run_grid_local    : execute independent jobs locally, each pinned with taskset to its own
                         block of `threads_per_job` cores
   - array_spec        : compress a list of indices into a SLURM --array spec, e.g. "0-5,8,10-12"
@@ -28,17 +29,16 @@ import subprocess
 import numpy as np
 
 
-def prepare_grid(grid_dir, vals, header, only=None, force=False):
+def prepare_grid(grid_dir, names, only=None, force=False):
     """
-    Make grid_dir/ and grid_dir/val<idx>/ for every point, write grid_dir/vals.txt and return the
-    list of indices to run: `only` (or all points), minus those that already have a result.json
+    Make grid_dir/ and grid_dir/<name>/ for every point of `names` and return the list of indices
+    (into names) to run: `only` (or all points), minus those that already have a result.json
     unless force=True.
     """
     os.makedirs(grid_dir, exist_ok=True)
-    np.savetxt(os.path.join(grid_dir, "vals.txt"), vals, header=header)
-    npoints = len(vals)
-    for i in range(npoints):
-        os.makedirs(os.path.join(grid_dir, f"val{i}"), exist_ok=True)
+    npoints = len(names)
+    for n in names:
+        os.makedirs(os.path.join(grid_dir, n), exist_ok=True)
 
     candidates = list(only) if only is not None else list(range(npoints))
     bad = [i for i in candidates if not 0 <= i < npoints]
@@ -48,10 +48,10 @@ def prepare_grid(grid_dir, vals, header, only=None, force=False):
         return candidates
 
     todo = [i for i in candidates
-            if not os.path.exists(os.path.join(grid_dir, f"val{i}", "result.json"))]
+            if not os.path.exists(os.path.join(grid_dir, names[i], "result.json"))]
     skipped = sorted(set(candidates) - set(todo))
     if skipped:
-        print(f"skipping {len(skipped)} already-complete point(s): {skipped}")
+        print(f"skipping {len(skipped)} already-complete point(s): {[names[i] for i in skipped]}")
     return todo
 
 
@@ -140,9 +140,11 @@ def array_spec(indices):
 
 def write_sbatch_array(path, script, cfg_path, grid_dir, indices, threads, slurm_cfg, cwd):
     """
-    Write an sbatch job-array script: one array task per grid index, each with `threads` cores,
-    running  <python> <script> --idx $SLURM_ARRAY_TASK_ID --config <cfg_path> --num-threads N.
-    The val<idx>/ directories must already exist (SLURM does not create the --output dir).
+    Write an sbatch job-array script: one array task per index into the config's scan.p0 list, each
+    with `threads` cores, running
+        <python> <script> --idx $SLURM_ARRAY_TASK_ID --config <cfg_path> --num-threads N.
+    The SLURM logs go to grid_dir/slurm-<job>_<task>.log (the point dirs are named by p0, which
+    SLURM's --output pattern cannot express); each point also writes its own files as usual.
     """
     s = slurm_cfg or {}
     spec = array_spec(indices)
@@ -155,7 +157,7 @@ def write_sbatch_array(path, script, cfg_path, grid_dir, indices, threads, slurm
              "#SBATCH --nodes=1",
              "#SBATCH --ntasks=1",
              f"#SBATCH --cpus-per-task={threads}",
-             f"#SBATCH --output={grid_dir}/val%a/slurm-%A_%a.log"]
+             f"#SBATCH --output={grid_dir}/slurm-%A_%a.log"]
     for key in ("time", "mem", "partition", "account", "qos"):
         if s.get(key) is not None:
             lines.append(f"#SBATCH --{key}={s[key]}")

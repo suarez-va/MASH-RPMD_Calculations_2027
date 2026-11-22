@@ -4,7 +4,7 @@ plot_dens_movie.py -- animate the exact ground / excited ADIABATIC nuclear densi
     rho_g(x,t) = |psi_g(x,t)|^2      lower adiabat, RED
     rho_e(x,t) = |psi_e(x,t)|^2      upper adiabat, BLUE
 
-into an .mp4.  This is the exact counterpart of ../../../plot_rho_movie.py (MASH: rho_-(R,t) on the
+into an .mp4.  This is the exact counterpart of ../../plot_rho_movie.py (MASH: rho_-(R,t) on the
 lower adiabat, rho_+(R,t) on the upper), drawn the same way:
 
     integral rho_g dx = c_-(t) (= Cm in dynamics.npz),   integral rho_e dx = c_+(t) (= Cp)
@@ -12,15 +12,15 @@ lower adiabat, rho_+(R,t) on the upper), drawn the same way:
 The scan does not keep the wavefunction densities (dynamics.npz is time series only), so make them
 for the point first -- it reruns that one p0, deterministic, same result.json / dynamics.npz:
 
-    python3 run_dvr_point.py --idx 120 --save-dens       # -> p0_grid/val120/densities.npz
-    python3 plot_dens_movie.py --idx 120                 # -> p0_grid/val120/dens_movie.mp4
-    python3 plot_dens_movie.py --p0 5.0                  # the grid point nearest p0 = 5
-    python3 plot_dens_movie.py --idx 120 --tmax 0 --rmin -40 --rmax 40   # the whole DVR run
+    python3 run_dvr_point.py --p0 5.0 --save-dens        # -> p0_grid/p0_5.0/densities.npz
+    python3 plot_dens_movie.py --p0 5.0                  # -> p0_grid/p0_5.0/dens_movie.mp4
+    python3 plot_dens_movie.py --p0 5.0 --tmax 3000 --rmin -40 --rmax 40
 
-The DVR runs 4 crossing times, the MASH runs (transmission_scan.n_steps) 2: by default the movie stops
-at half the DVR run, so it covers the same time span as the MASH movie (--tmax T sets it, 0 = whole
-run).  The x window is fixed (--rmin/--rmax, default [-15, 15] as plot_rho_movie.py); weight outside
-it is reported, so clipping is never silent.
+--p0 picks the finished point (a p0_grid/p0_*/ with densities.npz) nearest the value given.  By
+default the movie covers the whole run; with the same run_time_factor the DVR and MASH runs end at
+the same time (both use t_final = run_time_factor * m |x0| / p0), so the movies are comparable
+(--tmax T stops earlier).  The x window is fixed (--rmin/--rmax, default [-15, 15] as
+plot_rho_movie.py); weight outside it is reported, so clipping is never silent.
 """
 
 import os
@@ -29,19 +29,20 @@ import argparse
 import numpy as np
 import yaml
 
-from run_dvr_point import p0_grid
+import glob
+
+from run_dvr_point import point_name, grid_path
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 ap = argparse.ArgumentParser(description="Animate the exact adiabatic nuclear densities of one p0.")
-g = ap.add_mutually_exclusive_group(required=True)
-g.add_argument("--idx", type=int, help="index into the p0 scan grid")
-g.add_argument("--p0", type=float, help="incident momentum: the nearest grid point is used")
+ap.add_argument("--p0", type=float, required=True,
+                help="incident momentum: the nearest finished point with densities.npz is used")
 ap.add_argument("--config", default=None)
 ap.add_argument("--rmin", type=float, default=-15.0)
 ap.add_argument("--rmax", type=float, default=15.0)
 ap.add_argument("--tmax", type=float, default=None,
-                help="last time shown in a.u. (default: half the run = the MASH run length; 0 = all)")
+                help="last time shown in a.u. (default / 0: the whole run)")
 ap.add_argument("--frames", type=int, default=300, help="target movie frames")
 ap.add_argument("--fps", type=int, default=30)
 ap.add_argument("--out", default=None, help="output .mp4 (default: <point dir>/dens_movie.mp4)")
@@ -49,15 +50,17 @@ a = ap.parse_args()
 
 with open(a.config or os.path.join(script_dir, "config.yaml")) as f:
     cfg = yaml.safe_load(f)
-grid = p0_grid(cfg)
-idx = a.idx if a.idx is not None else int(np.argmin(np.abs(grid - a.p0)))
-if not 0 <= idx < grid.size:
-    raise SystemExit(f"--idx {idx} is outside the grid (0..{grid.size - 1})")
-point = os.path.join(script_dir, cfg["runtime"].get("grid_dir", "p0_grid"), f"val{idx}")
-path = os.path.join(point, "densities.npz")
-if not os.path.isfile(path):
-    raise SystemExit(f"[dens] no {path}\n[dens] make it first:  python3 run_dvr_point.py --idx {idx} "
-                     f"--save-dens   (p0 = {grid[idx]:g})")
+have = sorted(glob.glob(os.path.join(grid_path(cfg), "p0_*", "densities.npz")))
+if not have:
+    raise SystemExit(f"[dens] no p0_*/densities.npz under {grid_path(cfg)}\n[dens] make it first:  "
+                     f"python3 run_dvr_point.py --p0 {a.p0!r} --save-dens")
+vals = np.array([float(os.path.basename(os.path.dirname(h))[3:]) for h in have])
+k = int(np.argmin(np.abs(vals - a.p0)))
+path = have[k]
+point = os.path.dirname(path)
+if point_name(vals[k]) != point_name(a.p0):
+    print(f"[dens] no densities for p0 = {a.p0:g}; using the nearest, p0 = {vals[k]:g}   (make p0 = "
+          f"{a.p0:g} with: python3 run_dvr_point.py --p0 {a.p0!r} --save-dens)")
 
 d = np.load(path)
 t, x = d["t"], d["x"]
@@ -65,7 +68,7 @@ rho_g, rho_e = d["rho_g"].astype(np.float64), d["rho_e"].astype(np.float64)
 dx = x[1] - x[0]
 c_m, c_p = rho_g.sum(axis=1) * dx, rho_e.sum(axis=1) * dx
 
-tmax = 0.5 * t[-1] if a.tmax is None else (t[-1] if a.tmax <= 0 else a.tmax)
+tmax = t[-1] if a.tmax is None or a.tmax <= 0 else a.tmax
 nt = int(np.searchsorted(t, tmax, side="right"))
 fidx = np.unique(np.linspace(0, nt - 1, min(a.frames, nt)).astype(int))
 win = (x >= a.rmin) & (x <= a.rmax)

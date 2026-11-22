@@ -6,8 +6,12 @@ momentum p0 (same observables as MASH-RPMD_Tully/analyze_transmission.py).
     python3 2_collect.py                            # config.yaml
     python3 2_collect.py --config config_smoke.yaml  # results of a test scan
 
+Every p0_grid/p0_<p0>/result.json present is collected, whichever batch (scan.p0 list and
+run_time_factor) produced it, so after each batch this rebuilds the table over ALL points so far --
+no separate accumulate step. Points of the current batch without a result are listed as missing.
+
 Writes p0_grid/results.csv, a quick DVR-only p0_grid/scan.png, and scan_transmission.txt in this
-directory -- the same `name = [...]` layout ../../../scan_transmission.py writes for the MASH dirs
+directory -- the same `name = [...]` layout ../../scan_transmission.py writes for the MASH dirs
 (nucP_init = p0, CRg/CTg/CRe/CTe final values, *_err = 0; no M arrays: exact dynamics has none),
 which ../figure.py reads to draw the final comparison. Points that have not finished yet are
 reported as missing rather than silently omitted, so a partial scan is obvious.
@@ -24,7 +28,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from run_dvr_point import p0_grid
+import glob
+
+from run_dvr_point import p0_grid, point_name, grid_path
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -35,21 +41,17 @@ args = ap.parse_args()
 cfg_path = args.config if os.path.isabs(args.config) else os.path.join(script_dir, args.config)
 with open(cfg_path) as f:
     cfg = yaml.safe_load(f)
-grid_dir = os.path.join(script_dir, cfg.get("runtime", {}).get("grid_dir", "p0_grid"))
+grid_dir = grid_path(cfg)
 
-p0_ar = p0_grid(cfg)
-
-rows, missing = [], []
-for i in range(len(p0_ar)):
-    p = os.path.join(grid_dir, f"val{i}", "result.json")
-    if not os.path.exists(p):
-        missing.append(i)
-        continue
+rows = []
+for p in glob.glob(os.path.join(grid_dir, "p0_*", "result.json")):
     with open(p) as f:
         rows.append(json.load(f))
+done = {point_name(r["p0"]) for r in rows}
+missing = [float(p) for p in p0_grid(cfg) if point_name(p) not in done]
 
 if missing:
-    print(f"WARNING: {len(missing)} point(s) have no result.json yet: {missing}")
+    print(f"WARNING: {len(missing)} point(s) of the current batch have no result.json yet: {missing}")
     print("         re-run: python3 1_run_p0_scan_local.py")
 if not rows:
     raise SystemExit("no results found - run 1_run_p0_scan_local.py first")
@@ -57,10 +59,10 @@ if not rows:
 rows.sort(key=lambda r: r["p0"])
 
 csv_path = os.path.join(grid_dir, "results.csv")
-fields = ["idx", "p0", "E_total", "CRg_final", "CTg_final", "CRe_final", "CTe_final",
+fields = ["p0", "run_time_factor", "E_total", "CRg_final", "CTg_final", "CRe_final", "CTe_final",
           "norm_final", "max_norm_drift", "max_energy_drift", "max_edge_population",
           "high_k_population_final", "t_cross", "t_cross_free_estimate", "t_final", "nsteps",
-          "dt", "npts", "t_dyn_s"]
+          "dt", "npts", "dx", "x_min", "x_max", "t_dyn_s"]
 with open(csv_path, "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
     w.writeheader()
@@ -107,15 +109,14 @@ fig.savefig(png)
 print(f"wrote {png}")
 
 print(f"\n{'p0':>7} {'C_Rg':>9} {'C_Tg':>9} {'C_Re':>9} {'C_Te':>9} {'norm':>9} "
-      f"{'edge pop':>9} {'t_final':>9} {'t_dyn':>7}")
+      f"{'edge pop':>9} {'factor':>6} {'t_final':>9} {'npts':>6} {'t_dyn':>7}")
 for r in rows:
     print(f"{r['p0']:>7.3f} {r['CRg_final']:>9.5f} {r['CTg_final']:>9.5f} {r['CRe_final']:>9.5f} "
           f"{r['CTe_final']:>9.5f} {r['norm_final']:>9.5f} {r['max_edge_population']:>9.1e} "
-          f"{r['t_final']:>9.0f} {r['t_dyn_s']:>6.1f}s"
-          + ("   [t_cross: free-particle estimate]" if r.get("t_cross_free_estimate") else ""))
+          f"{r.get('run_time_factor', float('nan')):>6g} {r['t_final']:>9.0f} {r['npts']:>6d} {r['t_dyn_s']:>6.1f}s")
 
 
-# ---------------- scan_transmission.txt (same layout as ../../../scan_transmission.py) ----------------
+# ---------------- scan_transmission.txt (same layout as ../../scan_transmission.py) ----------------
 def _fmt_list(xs, fmt):
     return "[" + ", ".join("nan" if not np.isfinite(x) else format(x, fmt) for x in xs) + "]"
 
@@ -136,8 +137,9 @@ with open(out, "w") as f:
     f.write("\n".join(lines) + "\n")
 print(f"\nwrote {out}")
 
-edge = [r["idx"] for r in rows if r["max_edge_population"] > 1e-4]
+edge = [r["p0"] for r in rows if r["max_edge_population"] > 1e-4]
 if edge:
-    print(f"\nWARNING: wavepacket reaches the grid boundary at point(s) {edge} - enlarge the grid")
+    print(f"\nWARNING: wavepacket reaches the grid boundary at p0 = {edge} - raise grid.n_sigma / "
+          f"grid.edge_frac and rerun those points")
 
 print("\nnext: python ../figure.py   (exact + MASH-Classical + MASH-Quantum)")

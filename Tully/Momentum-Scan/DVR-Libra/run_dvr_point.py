@@ -7,13 +7,20 @@ transform (SOFT) solver, and save the channel-resolved populations C_Rg, C_Tg, C
 This is the single-point worker invoked by 1_run_p0_scan_local.py. It is also runnable by hand
 for debugging a single value:
 
-    python3 run_dvr_point.py --idx 6
-    python3 run_dvr_point.py --idx 6 --save-dens   # also keep the densities for plot_dens_movie.py
+    python3 run_dvr_point.py --p0 6.0
+    python3 run_dvr_point.py --p0 6.0 --save-dens   # also keep the densities for plot_dens_movie.py
+    python3 run_dvr_point.py --idx 3                # the 4th p0 of the config's scan.p0 list
 
-Everything physical comes from config.yaml. The only thing that varies across the scan is p0 (and
-with it the run length: nsteps is chosen so that the wavepacket centre reaches analysis.x_split
-at the quarter point of the run, see crossing_time). Each point writes into its own
-p0_grid/val<idx>/ directory. Physics and Libra usage are identical to Single-Point/1_run_point.py.
+Everything physical comes from config.yaml. Per point:
+
+  run length  t_final = scan.run_time_factor * t0,  t0 = m |x0 - x_split| / p0, the free-particle
+              crossing time (the same definition as the MASH runs' n_steps, so one factor means the
+              same final time in both); nsteps = t_final / dt rounded up to a multiple of save_every
+  grid        fixed spacing grid.dx; the box is sized from p0 and t_final (box(): the fastest
+              transmitted / reflected fronts plus a buffer), with x = x_split = 0 on the grid
+
+Each point writes into its own p0_grid/p0_<p0>/ directory (named by value, like the MASH nucP_<v>/,
+so batches with different p0 lists and run_time_factors never collide).
 """
 
 import os
@@ -30,7 +37,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Only when run as a script: the driver/collector also import this module for its grid function.
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--idx", type=int, required=True, help="index into the scan grid")
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--p0", type=float, help="incident momentum of this point")
+    g.add_argument("--idx", type=int, help="index into the config's scan.p0 list")
     ap.add_argument("--config", default=None)
     ap.add_argument("--num-threads", type=int, default=None,
                     help="cores for this point (default: dyn.num_threads from the config)")
@@ -148,9 +157,68 @@ def potential_fn(cfg):
 
 
 def p0_grid(cfg):
-    """The scanned incident momenta, from the config `grids: p0:` block (stop inclusive)."""
-    g = cfg["grids"]["p0"]
-    return np.linspace(float(g["start"]), float(g["stop"]), int(g["num"]))
+    """The incident momenta of the current batch: the config's scan.p0 list."""
+    if "grids" in cfg and "scan" not in cfg:
+        raise KeyError("old config layout (grids: p0: start/stop/num): use scan: p0: [...] and "
+                       "scan: run_time_factor:")
+    return np.asarray(cfg["scan"]["p0"], dtype=np.float64)
+
+
+def point_name(p0):
+    """Directory name of one scan point, by value: p0_2.0, p0_4.473, ..."""
+    return f"p0_{float(p0)!r}"
+
+
+def grid_path(cfg):
+    """The scan's output directory (runtime.grid_dir, relative to this folder unless absolute)."""
+    return os.path.join(script_dir, cfg["runtime"].get("grid_dir", "p0_grid"))
+
+
+def run_length(cfg, p0):
+    """(t0, t_final, nsteps, save_every) of one point: t_final = run_time_factor * t0 rounded up to
+    whole save_every blocks, t0 = m |x0 - x_split| / p0 (free-particle crossing time)."""
+    w, d = cfg["wavepacket"], cfg["dyn"]
+    mass, x0, dt = float(w["mass"]), float(w["x0"]), float(d["dt"])
+    x_split = float(cfg["analysis"]["x_split"])
+    f = float(cfg["scan"]["run_time_factor"])
+    t0 = mass * abs(x_split - x0) / abs(float(p0))
+    # long runs: widen the snapshot interval so at most ~max_snapshots wavefunction snapshots are
+    # held in memory (the solver stores every one of them in 4 representations)
+    save_every = max(int(d["save_every"]), int(np.ceil(f * t0 / dt / int(d.get("max_snapshots", 500)))))
+    nsteps = int(np.ceil(f * t0 / dt / save_every)) * save_every
+    return t0, nsteps * dt, nsteps, save_every
+
+
+def box(cfg, p0, t_final):
+    """
+    (x_min, x_max, npts) of the FFT grid of one point: spacing exactly grid.dx (libra builds the grid
+    with linspace(x_min, x_max, npts), both ends included), npts EVEN (libra's momentum grid,
+    fftshift(arange(-n//2, n//2)) dk, is the standard FFT ordering only for even n) and
+    x_min = -npts/2 dx, x_max = (npts/2 - 1) dx, so x = 0 (= x_split, the R/T divide) is a grid
+    point.  The half-width covers, by
+    t_final, with momenta up to p_hi = p0 + n_sigma * sigma_p (sigma_p = 1/(2 sigma)):
+        the transmitted front          x0 + p_hi t / m
+        the front reflected at x_split  2 x_split - x0 - p_hi t / m
+        backward-moving components     x0 - max(0, -(p0 - n_sigma sigma_p)) t / m
+        the initial packet             |x0| + n_sigma sigma
+    plus n_sigma * sigma, then enlarged so all of it stays out of the outer edge_frac on each side
+    (where the edge-population check looks).  Nothing in this model accelerates the packet beyond
+    its initial momenta (both adiabats have equal asymptotes, the excited channel costs energy), so
+    p_hi bounds every component.
+    """
+    w, g = cfg["wavepacket"], cfg["grid"]
+    mass, x0, sigma = float(w["mass"]), float(w["x0"]), float(w["sigma"])
+    x_split = float(cfg["analysis"]["x_split"])
+    dx, ns, edge = float(g["dx"]), float(g.get("n_sigma", 6)), float(g.get("edge_frac", 0.05))
+    sp = 1.0 / (2.0 * sigma)
+    p_hi, p_lo = float(p0) + ns * sp, float(p0) - ns * sp
+    fronts = [x0 + p_hi * t_final / mass,
+              2.0 * x_split - x0 - p_hi * t_final / mass,
+              x0 - max(0.0, -p_lo) * t_final / mass,
+              abs(x0) + ns * sigma]
+    half = (max(abs(f) for f in fronts) + ns * sigma) / (1.0 - 2.0 * edge)
+    n_half = int(np.ceil(half / dx)) + 1
+    return -n_half * dx, (n_half - 1) * dx, 2 * n_half
 
 
 def observables(psi_dia, U, V, x, k, mass, x_split):
@@ -224,26 +292,25 @@ def crossing_time(model, mass, x0, p0, x_split, representation, state, form="tan
 
 
 def main():
-    m, w, g, d = cfg["model"], cfg["wavepacket"], cfg["grid"], cfg["dyn"]
-    mass, x0, p0, sigma = float(w["mass"]), float(w["x0"]), float(p0_grid(cfg)[args.idx]), float(w["sigma"])
-    dt, save_every = float(d["dt"]), int(d["save_every"])
+    m, w, d = cfg["model"], cfg["wavepacket"], cfg["dyn"]
+    p0 = float(args.p0) if args.p0 is not None else float(p0_grid(cfg)[args.idx])
+    mass, x0, sigma = float(w["mass"]), float(w["x0"]), float(w["sigma"])
+    dt = float(d["dt"])
     x_split = float(cfg["analysis"]["x_split"])
+    rtf = float(cfg["scan"]["run_time_factor"])
 
-    # Run length: the wavepacket centre reaches x_split at the quarter point of the simulation.
-    # nsteps = 4 * t_cross / dt, rounded up to a multiple of save_every.
+    # run length (free-particle crossing time x run_time_factor) and the box it needs
     form = model_form(cfg)
+    t0, t_final, nsteps, save_every = run_length(cfg, p0)
     t_cross, free = crossing_time(m, mass, x0, p0, x_split, w["representation"], w["state"], form)
-    # Long runs: widen the snapshot interval so that at most ~max_snapshots wavefunction
-    # snapshots are held in memory (the solver stores every one of them in 4 representations).
-    max_snapshots = int(d.get("max_snapshots", 500))
-    save_every = max(save_every, int(np.ceil(4.0 * t_cross / dt / max_snapshots)))
-    nsteps = int(np.ceil(4.0 * t_cross / dt / save_every)) * save_every
-    print(f"t_cross = {t_cross:.1f} a.u. -> nsteps = {nsteps} (t_final = {nsteps * dt:g})"
-          + ("   [free-particle estimate: p0 is below the classical barrier]" if free else ""),
-          flush=True)
+    x_lo, x_hi, npts = box(cfg, p0, t_final)
+    g = {"x_min": x_lo, "x_max": x_hi, "npts": npts}
+    print(f"run_time_factor = {rtf:g} x t0 = {t0:.1f} a.u. -> nsteps = {nsteps} (t_final = {t_final:g});  "
+          f"classical arrival at x_split on the adiabat: "
+          + ("none (p0 below the barrier)" if free else f"{t_cross:.1f} a.u."), flush=True)
 
-    grid_dir = os.path.join(script_dir, cfg["runtime"].get("grid_dir", "p0_grid"))
-    outdir = os.path.join(grid_dir, f"val{args.idx}")
+    grid_dir = grid_path(cfg)
+    outdir = os.path.join(grid_dir, point_name(p0))
     os.makedirs(outdir, exist_ok=True)
     os.chdir(outdir)
     if os.path.exists("result.json"):      # a failed re-run must not leave a stale result behind
@@ -258,7 +325,7 @@ def main():
     print(f"Tully 1 ({form} form): {model_params}", flush=True)
     print(f"wavepacket: x0={x0} p0={p0} sigma={sigma} mass={mass} "
           f"({w['representation']} state {w['state']})", flush=True)
-    print(f"grid: [{g['x_min']}, {g['x_max']}] with {g['npts']} points;  "
+    print(f"grid: [{g['x_min']:g}, {g['x_max']:g}] with {g['npts']} points (dx = {float(cfg['grid']['dx']):g});  "
           f"dt={dt}, nsteps={nsteps}", flush=True)
     print(f"output -> {outdir}", flush=True)
 
@@ -328,7 +395,8 @@ def main():
     hi_k = float((np.abs(psi_k[np.abs(k) > 0.9 * kmax]) ** 2).sum() * dx / x.size)
 
     result = {
-        "idx": args.idx,
+        "point": point_name(p0), "run_time_factor": rtf, "t0": t0,
+        "x_min": float(x_lo), "x_max": float(x_hi),
         "model": model_params, "model_form": form, "max_adiabat_mismatch": adiabat_mismatch,
         "mass": mass, "x0": x0, "p0": p0, "sigma": sigma,
         "representation": w["representation"], "state": int(w["state"]),
@@ -358,7 +426,7 @@ def main():
           f"edge population {edge_pop:.2e}   high-k population {hi_k:.2e}", flush=True)
     if edge_pop > 1e-4:
         print("WARNING: the wavepacket reaches the grid boundary (periodic wrap-around) - "
-              "enlarge the grid or shorten the run", flush=True)
+              "raise grid.n_sigma / grid.edge_frac or shorten the run", flush=True)
     print(f"model check: max |E_adi(solver) - E_adi(analytic)| = {adiabat_mismatch:.2e}", flush=True)
     print(f"timing: dyn {t_dyn:.1f}s", flush=True)
 

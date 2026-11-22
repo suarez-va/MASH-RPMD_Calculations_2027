@@ -28,7 +28,7 @@ nbds (C_Tg(t) is the integral of rho_-(R,t) over R > 0, etc.).
 In MASH sgn(S_z) selects the active adiabat, so rho_+ is the upper surface and rho_- the lower.
 transmission_scan.py starts every trajectory on the lower adiabat, so rho_+ is identically zero
 until the packet reaches the crossing.  The DVR counterpart (|psi_g|^2, |psi_e|^2 of the exact
-wavepacket) is Wigner-Init/Momentum-Scan/DVR-Libra/plot_dens_movie.py.
+wavepacket) is Momentum-Scan/DVR-Libra/plot_dens_movie.py.
 
 A run made without Tjump has no /weights table and is analysed, as in analyze_transmission.py, as the
 Tjump -> infinity limit W_PP = c0 2|S_z(0)| (|bead-mean S_z(0)|), with c0 inferred from S_z(0) (all on
