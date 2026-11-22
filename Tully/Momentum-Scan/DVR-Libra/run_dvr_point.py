@@ -8,8 +8,15 @@ This is the single-point worker invoked by 1_run_p0_scan_local.py. It is also ru
 for debugging a single value:
 
     python3 run_dvr_point.py --p0 6.0
-    python3 run_dvr_point.py --p0 6.0 --save-dens   # also keep the densities for plot_dens_movie.py
     python3 run_dvr_point.py --idx 3                # the 4th p0 of the config's scan.p0 list
+
+Output per point (the raw data, like the MASH shards):
+    densities.npz  the adiabatic nuclear densities rho_g(x,t) = |psi_g|^2, rho_e(x,t) = |psi_e|^2 at
+                   every snapshot (float32) + the grid, the snapshot times and the run parameters:
+                   everything 2_collect.py (C_c(t)) and plot_dens_movie.py need; a few to ~25 MB
+    result.json    run parameters + diagnostics (norm / energy drift, edge and high-k population,
+                   final C_c as a quick look); its presence marks the point as done
+2_collect.py turns densities.npz into transmission.npz + analyze_transmission.png and can delete it.
 
 Everything physical comes from config.yaml. Per point:
 
@@ -43,10 +50,6 @@ if __name__ == "__main__":
     ap.add_argument("--config", default=None)
     ap.add_argument("--num-threads", type=int, default=None,
                     help="cores for this point (default: dyn.num_threads from the config)")
-    ap.add_argument("--save-dens", action="store_true",
-                    help="also write densities.npz: the ground/excited adiabatic nuclear densities "
-                         "|psi_g(x,t)|^2, |psi_e(x,t)|^2 at every snapshot (for plot_dens_movie.py; "
-                         "~30 MB, so off in the scan)")
     args = ap.parse_args()
 
     cfg_path = args.config or os.path.join(script_dir, "config.yaml")
@@ -238,7 +241,10 @@ def observables(psi_dia, U, V, x, k, mass, x_split):
     dens_k = np.abs(psi_k) ** 2 * dx / npts         # sums to the norm
 
     # Heaviside step in position with h(0) = 1/2, as in MASH-RPMD_Tully/analyze_transmission.py
-    hR = np.where(x > x_split, 1.0, np.where(x < x_split, 0.0, 0.5))[None, :]
+    # h(x - x_split) with h = 1/2 ON x_split: libra builds the grid in float32, so the grid point at
+    # x_split (box() puts one there) sits ~1e-6 off it -- compare with a tolerance, not exactly
+    tol = 1e-3 * abs(x[1] - x[0])
+    hR = np.where(x > x_split + tol, 1.0, np.where(x < x_split - tol, 0.0, 0.5))[None, :]
     rho_g, rho_e = dens_adi[:, :, 0], dens_adi[:, :, 1]     # ground / excited adiabat densities
     norm = dens_dia.sum(axis=(1, 2)) * dx
     out = {
@@ -313,8 +319,9 @@ def main():
     outdir = os.path.join(grid_dir, point_name(p0))
     os.makedirs(outdir, exist_ok=True)
     os.chdir(outdir)
-    if os.path.exists("result.json"):      # a failed re-run must not leave a stale result behind
-        os.remove("result.json")
+    for stale in ("result.json", "densities.npz", "transmission.npz", "analyze_transmission.png"):
+        if os.path.exists(stale):          # a failed re-run must not leave a stale result behind
+            os.remove(stale)
 
     torch.set_num_threads(num_threads)
 
@@ -373,16 +380,15 @@ def main():
 
     obs = observables(psi, U, V, x, k, mass, x_split)
 
-    # time series only (no wavepacket densities) to keep the scan directory small
-    np.savez("dynamics.npz", t=t_ar,
+    # the raw data: adiabatic densities at every snapshot (written whole, then renamed, so a killed
+    # run never leaves a truncated file behind)
+    np.savez("densities.tmp.npz", t=t_ar, x=x, rho_g=obs["dens_adi"][:, :, 0], rho_e=obs["dens_adi"][:, :, 1],
              mass=mass, x0=x0, p0=p0, sigma=sigma, dt=dt, nsteps=nsteps, x_split=x_split,
-             **model_params, **{key: val for key, val in obs.items() if not key.startswith("dens_")})
-
-    if args.save_dens:
-        np.savez("densities.npz", t=t_ar, x=x, rho_g=obs["dens_adi"][:, :, 0],
-                 rho_e=obs["dens_adi"][:, :, 1], mass=mass, x0=x0, p0=p0, sigma=sigma,
-                 x_split=x_split, Cm=obs["Cm"], Cp=obs["Cp"], norm=obs["norm"])
-        print(f"densities -> {os.path.join(outdir, 'densities.npz')}", flush=True)
+             run_time_factor=rtf, **model_params,
+             norm=obs["norm"], Ekin=obs["Ekin"], Epot=obs["Epot"], Etot=obs["Etot"])
+    os.replace("densities.tmp.npz", "densities.npz")
+    print(f"raw densities -> {os.path.join(outdir, 'densities.npz')}  "
+          f"({os.path.getsize('densities.npz') / 1e6:.1f} MB)", flush=True)
 
     # Is anything close to the (periodic) grid boundary? Check the outer 5% on each side.
     nedge = max(1, x.size // 20)

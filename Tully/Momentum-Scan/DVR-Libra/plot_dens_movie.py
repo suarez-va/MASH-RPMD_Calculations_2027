@@ -7,13 +7,13 @@ plot_dens_movie.py -- animate the exact ground / excited ADIABATIC nuclear densi
 into an .mp4.  This is the exact counterpart of ../../plot_rho_movie.py (MASH: rho_-(R,t) on the
 lower adiabat, rho_+(R,t) on the upper), drawn the same way:
 
-    integral rho_g dx = c_-(t) (= Cm in dynamics.npz),   integral rho_e dx = c_+(t) (= Cp)
+    integral rho_g dx = c_-(t) (= Cm in transmission.npz),   integral rho_e dx = c_+(t) (= Cp)
 
-The scan does not keep the wavefunction densities (dynamics.npz is time series only), so make them
-for the point first -- it reruns that one p0, deterministic, same result.json / dynamics.npz:
+It reads the raw densities.npz every run writes.  2_collect.py --delete-raw removes it; to make a
+movie afterwards, rerun that one point (deterministic, same result):
 
-    python3 run_dvr_point.py --p0 5.0 --save-dens        # -> p0_grid/p0_5.0/densities.npz
     python3 plot_dens_movie.py --p0 5.0                  # -> p0_grid/p0_5.0/dens_movie.mp4
+    python3 1_run_p0_scan_local.py --only 5.0 --force    # (if its densities.npz was deleted)
     python3 plot_dens_movie.py --p0 5.0 --tmax 3000 --rmin -40 --rmax 40
 
 --p0 picks the finished point (a p0_grid/p0_*/ with densities.npz) nearest the value given.  By
@@ -52,15 +52,15 @@ with open(a.config or os.path.join(script_dir, "config.yaml")) as f:
     cfg = yaml.safe_load(f)
 have = sorted(glob.glob(os.path.join(grid_path(cfg), "p0_*", "densities.npz")))
 if not have:
-    raise SystemExit(f"[dens] no p0_*/densities.npz under {grid_path(cfg)}\n[dens] make it first:  "
-                     f"python3 run_dvr_point.py --p0 {a.p0!r} --save-dens")
+    raise SystemExit(f"[dens] no p0_*/densities.npz under {grid_path(cfg)} (deleted by 2_collect.py "
+                     f"--delete-raw?)\n[dens] rerun the point:  python3 run_dvr_point.py --p0 {a.p0!r}")
 vals = np.array([float(os.path.basename(os.path.dirname(h))[3:]) for h in have])
 k = int(np.argmin(np.abs(vals - a.p0)))
 path = have[k]
 point = os.path.dirname(path)
 if point_name(vals[k]) != point_name(a.p0):
     print(f"[dens] no densities for p0 = {a.p0:g}; using the nearest, p0 = {vals[k]:g}   (make p0 = "
-          f"{a.p0:g} with: python3 run_dvr_point.py --p0 {a.p0!r} --save-dens)")
+          f"{a.p0:g} with: python3 run_dvr_point.py --p0 {a.p0!r})")
 
 d = np.load(path)
 t, x = d["t"], d["x"]
@@ -127,9 +127,8 @@ print(f"[dens] {path}: p0={float(d['p0']):g} sigma={float(d['sigma']):g}  {fidx.
       f"t = 0..{t[fidx[-1]]:.1f} a.u. (run ends at {t[-1]:.1f})  window [{a.rmin:g}, {a.rmax:g}] "
       f"(dx={dx:.4f})")
 print(f"[dens] c_+ : {c_p[0]:.4f} -> {c_p[fidx[-1]]:.4f}    c_- : {c_m[0]:.4f} -> {c_m[fidx[-1]]:.4f}")
-if "Cm" in d.files:
-    print(f"[dens] check vs dynamics: max|c_- - Cm| = {np.abs(c_m - d['Cm']).max():.2e}  "
-          f"max|c_+ - Cp| = {np.abs(c_p - d['Cp']).max():.2e}")
+if "norm" in d.files:
+    print(f"[dens] check vs the run's norm: max|c_- + c_+ - norm| = {np.abs(c_m + c_p - d['norm']).max():.2e}")
 if lost.max() > 1e-4:
     w = int(np.argmax(lost))
     print(f"[dens] WARNING: the [{a.rmin:g}, {a.rmax:g}] window clips weight; worst frame "
