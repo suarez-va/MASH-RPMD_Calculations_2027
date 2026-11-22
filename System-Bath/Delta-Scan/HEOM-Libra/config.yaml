@@ -13,7 +13,7 @@ system:
 
 grids:
   log10_Delta:         # electronic coupling: Delta = 10**(log10_Delta) / beta
-    start: -0.75
+    start: -0.57
     stop: 0.57           # inclusive
     num: 100             # evenly spaced in log10 -> spacing 0.1
 
@@ -59,7 +59,7 @@ slurm:
   partition: null
   account: gts-jkretchmer3-chemx
   qos: null
-  time: "24:00:00"
+  time: "29:00:00"
   mem: "100G"                       # per array task, i.e. per point
   max_concurrent: null             # throttle: at most this many points running at once
   extra_sbatch: []                 # extra lines, e.g. ["--constraint=intel", "--mail-type=FAIL"]
