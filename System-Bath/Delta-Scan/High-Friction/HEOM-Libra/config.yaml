@@ -38,7 +38,7 @@ therm:
 dyn:
   dt: 0.0001
   nsteps: 200001
-  nprint: 200000
+  nprint: 100
 
 # Rate from a line fit: beta*hbar*k = slope of K2(t) = -P2eq ln|1 - P2(t)/P2eq| vs t/(beta*hbar)
 # over [fitmin, fitmax], in units of t/(beta*hbar) (the dyn leg ends at (nsteps-1)*dt = 20).

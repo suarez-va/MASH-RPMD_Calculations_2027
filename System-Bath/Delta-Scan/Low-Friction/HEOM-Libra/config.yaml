@@ -18,7 +18,7 @@ grids:
     num: 100                                    # evenly spaced in log10 -> spacing 0.1
 
 heom:
-  KK: 3
+  KK: 2
   LL: 16
   spectral_density: 1                           # 1 = Brownian oscillator (expansion has KK+2 terms)
   truncation_scheme: 4
@@ -38,7 +38,7 @@ therm:
 dyn:
   dt: 0.001
   nsteps: 20001
-  nprint: 20000
+  nprint: 10 
 
 # Rate from a line fit: beta*hbar*k = slope of K2(t) = -P2eq ln|1 - P2(t)/P2eq| vs t/(beta*hbar)
 # over [fitmin, fitmax], in units of t/(beta*hbar) (the dyn leg ends at (nsteps-1)*dt = 20).
