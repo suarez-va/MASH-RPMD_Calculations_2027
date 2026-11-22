@@ -5,16 +5,16 @@
 
 CONFIG = {
     # ----------------------------------------------------------------- orchestration (workflow)
-    'n_traj'      : 1000000,                    # number of independent trajectories to run
+    'n_traj'      : 250000,                     # number of independent trajectories to run
     'base_seed'   : None,                       # int -> reproducible; None -> fresh OS entropy each trajectory
     'ncores'      : 10,                         # local cores for `python -m workflow.runner`
-    'shard_size'  : 1000,                       # trajectories per shards/shard_<s>.hdf (None -> one dir per trajectory)
+    'shard_size'  : 100,                        # trajectories per shards/shard_<s>.hdf (None -> one dir per trajectory)
     'shard_dir'   : 'shards',
     'system_file' : '../../../therm_scan.py',
     'grid_dir'    : 'traj_grid',
 
     'slurm': {
-        'max_tasks'     : 100,
+        'max_tasks'     : 250,
         'job_name'      : 'BOMD',
         'time'          : '39:00:00',
         'cpus_per_task' : 10,
