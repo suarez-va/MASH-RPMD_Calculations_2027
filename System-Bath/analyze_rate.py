@@ -137,9 +137,31 @@ P_2 > P2eq, driving u through zero and K_12 through the log singularity; those b
 meaningless slopes.  The script warns when it happens -- if you see that warning, use fewer, larger
 blocks.
 
+--- the saved result: rate.npz / rate_nojump.npz (so the shards can be deleted) ---------------------
+
+Every analysis of raw data (shards/ or data.hdf) also writes <point dir>/rate.npz (--w0-only:
+rate_nojump.npz): the per-unit partials themselves -- trajectories per unit, the 8 partial sums (the
+four terms of P_2 and of P_2') at every time, the jump count and the Sz(0) side flags, in trajectory
+order -- plus the time grid, the run's config_json and its configured n_traj.  Everything above is
+built from exactly these, so from the .npz alone P_2, M_2, K_12, M_12, the fits and the block analysis
+are recomputed exactly, with ANY --nblocks (blocks are groups of whole units), --fitmin / --fitmax,
+--beta, --c0 and --tmax.  Only --epsil (it changes the partial sums) needs the raw data again.
+~1 MB per 10^6 trajectories at 21 time points.
+
+    --delete-shards   after saving, delete shards/ and shards_partials/ -- only when the run is
+                      complete (n_traj reached the config's n_traj, no shard still being written).
+                      For a run WITH jumps the other variant (with jumps / --w0-only) is computed and
+                      saved first, so both curves stay available; a run without jumps needs only
+                      rate.npz (the two variants are identical there)
+    --saved-only      analyse the .npz even if the raw data is still there
+
+With no shards/ or data.hdf in the point dir, the .npz is read automatically.
+
 Usage (from a scan-point dir, e.g. Low-Friction/Epsilon-Scan/MASH-Classical/epsil_3.0,
 PYTHONPATH=<RP_MASH root>):
-    python ../../../../analyze_rate.py                # shards/ if present, else data.hdf
+    python ../../../../analyze_rate.py                # shards/, else data.hdf, else rate.npz
+    python ../../../../analyze_rate.py --ncores 16 --delete-shards     # analyse, save, free the disk
+    python ../../../../analyze_rate.py --nblocks 50 --fitmin 3         # later: from rate.npz
     python ../../../../analyze_rate.py --file shards --ncores 16 --nblocks 100 --fitmin 5 --fitmax 15
     python ../../../../analyze_rate.py --w0-only --out analyze_rate_nojump.png
     python ../../../../analyze_rate.py --refresh      # after changing an observable
@@ -147,6 +169,7 @@ PYTHONPATH=<RP_MASH root>):
 
 import os
 import json
+import shutil
 import argparse
 import functools
 
@@ -162,6 +185,7 @@ from workflow import plan_units, map_cached, ncores_source, open_readonly   # ca
 _VERSION = 'rate_v1'
 
 _TERMS = ('+P0 W_PP Pt', '-C0 W_CP Pt', '+P0 W_PC Ct', '-C0 W_CC Ct')
+SAVED = {False: 'rate.npz', True: 'rate_nojump.npz'}     # per-point saved partials, by w0_only
 
 
 def jump_label(cfg):
@@ -364,35 +388,35 @@ def block_rate(time, blk_P2, P2eq, fitmin, fitmax):
                 m_bar=m_bar, b_bar=b_bar, sigma_m=sigma_m, n_nonphys=n_nonphys, n_skipped=n_skipped)
 
 
-def compute(path, nblocks=None, fitmin=5.0, fitmax=15.0, beta_ovr=None, epsil_ovr=None,
-            slab=None, w0_only=False, c0=None, ncores=None, unit_rows=1000,
-            cache=True, refresh=False, cache_dir=None):
+def has_jump_rule(cfg):
+    """Does the run's config fire quantum jumps at all (jump_gap set, or a non-empty jump_index)?"""
+    return cfg.get('jump_gap') is not None or bool(list(cfg.get('jump_index', []))) \
+        or cfg.get('Tjump') is not None
+
+
+def reduce(path, epsil_ovr=None, w0_only=False, ncores=None, unit_rows=1000, cache=True,
+           refresh=False, cache_dir=None):
     """
     REDUCE step. `path` (a shard directory or a data.hdf) is split into units of at most unit_rows
     rows of one file (workflow.plan_units); every unit is reduced to its partial sums by
     _unit_partial on `ncores` workers (default: the CPUs of the SLURM allocation, else 1), or read
-    back from the cache of an earlier run (workflow.map_cached), and the partials are added up.
-    The blocks are nblocks contiguous groups of whole units. (slab is accepted for backward
-    compatibility and ignored: a unit is read in one piece.)
+    back from the cache of an earlier run (workflow.map_cached).  Returns the per-unit partials, in
+    trajectory order, and what the analysis needs besides them -- exactly what rate.npz stores.
     """
     units = plan_units(path, unit_rows)
     with open_readonly(units[0].file) as f:
         time = f['time'][:]
-        cfg  = json.loads(f.attrs['config_json'])
+        cfg_json = f.attrs['config_json']
         nbds = int(f.attrs['nbds'])
         jumps = 'weights' in f
         if jumps and f['weights'].shape[2] < 15:
             raise KeyError(f"{units[0].file} has a {f['weights'].shape[2]}-column /weights table, "
                            f"expected 15. The run predates the corrected time-dependent weights; "
                            f"re-run it.")
+    cfg = json.loads(cfg_json)
     full = bool(cfg.get('full_jump', True))      # False: hemisphere jumps, dot = 0 in W^(m)(t)
-
-    kvec  = float(cfg['kvec']); epsil = float(cfg['epsil'])
-    lbd   = float(cfg['lbd']);  delta = float(cfg['delta'])
-    beta  = float(cfg['beta'])
-    if beta_ovr  is not None: beta  = float(beta_ovr)
-    if epsil_ovr is not None: epsil = float(epsil_ovr)
-    prm = np.array([kvec, epsil, lbd, delta], dtype=np.float64)
+    epsil = float(cfg['epsil']) if epsil_ovr is None else float(epsil_ovr)
+    prm = np.array([float(cfg['kvec']), epsil, float(cfg['lbd']), float(cfg['delta'])], dtype=np.float64)
 
     # parallel setup, reported so a silent fall-back to one core cannot go unnoticed
     if ncores is None:
@@ -416,10 +440,66 @@ def compute(path, nblocks=None, fitmin=5.0, fitmax=15.0, beta_ovr=None, epsil_ov
         print('[rate] NOTE: computed on ONE core. Pass --ncores N to use N cores.', flush=True)
 
     used = [p for p in parts if p is not None]
-    n_units = len(used)
-    if n_units == 0:
+    if not used:
         raise RuntimeError('no unit could be read: every file is still being written. Rerun later.')
-    n_traj = int(sum(int(p['n']) for p in used))
+    return dict(time=np.asarray(time, dtype=np.float64),
+                unit_n=np.array([int(p['n']) for p in used], dtype=np.int64),
+                unit_tot=np.stack([p['tot'] for p in used]).astype(np.float64),          # (n_units, 8, T)
+                unit_jumps=np.array([int(p['n_jumps']) for p in used], dtype=np.int64),
+                unit_le0=np.array([bool(p['sz0_le0']) for p in used]),
+                unit_ge0=np.array([bool(p['sz0_ge0']) for p in used]),
+                epsil=float(epsil), nbds=nbds, jumps=bool(jumps), full=full, w0_only=bool(w0_only),
+                config_json=str(cfg_json), n_traj_cfg=int(cfg.get('n_traj', 0)),
+                n_files=len({u.file for u in units}),
+                complete=bool(n_inprog == 0 and len(used) == len(units)), unit_rows=int(unit_rows),
+                cache_stats=st)
+
+
+_SAVED_KEYS = ('time', 'unit_n', 'unit_tot', 'unit_jumps', 'unit_le0', 'unit_ge0', 'epsil', 'nbds',
+               'jumps', 'full', 'w0_only', 'config_json', 'n_traj_cfg', 'n_files', 'complete', 'unit_rows')
+
+
+def save_reduced(path, red):
+    """rate.npz / rate_nojump.npz: the per-unit partials + metadata (written whole, then renamed)."""
+    tmp = path + '.tmp.npz'
+    np.savez(tmp, version=_VERSION, **{k: red[k] for k in _SAVED_KEYS})
+    os.replace(tmp, path)
+
+
+def load_reduced(path, epsil_ovr=None):
+    """The reduce() dict back from a rate.npz / rate_nojump.npz."""
+    with np.load(path, allow_pickle=False) as z:
+        if str(z['version']) != _VERSION:
+            raise RuntimeError(f'{path} was written by analyze_rate {z["version"]}, this is {_VERSION}: '
+                               f'it needs the raw data again')
+        red = {k: z[k] for k in z.files}
+    red['epsil'] = float(red['epsil'])
+    for k in ('nbds', 'n_traj_cfg', 'n_files', 'unit_rows'):
+        red[k] = int(red[k])
+    for k in ('jumps', 'full', 'w0_only', 'complete'):
+        red[k] = bool(red[k])
+    red['config_json'] = str(red['config_json'])
+    red['cache_stats'] = None
+    if epsil_ovr is not None and not np.isclose(float(epsil_ovr), red['epsil']):
+        raise RuntimeError(f'--epsil {epsil_ovr} changes the partial sums, but {path} holds them for '
+                           f'epsil = {red["epsil"]:g}: that needs the raw data')
+    return red
+
+
+def finish(red, nblocks=None, fitmin=5.0, fitmax=15.0, beta_ovr=None, c0=None):
+    """
+    P_2, M_2, K_12, M_12, the fits and the block analysis from the per-unit partials (reduce() or a
+    saved .npz).  The blocks are nblocks contiguous groups of whole units.
+    """
+    time = red['time']
+    cfg = json.loads(red['config_json'])
+    kvec, lbd, delta = float(cfg['kvec']), float(cfg['lbd']), float(cfg['delta'])
+    epsil, nbds, jumps, full, w0_only = red['epsil'], red['nbds'], red['jumps'], red['full'], red['w0_only']
+    beta = float(cfg['beta']) if beta_ovr is None else float(beta_ovr)
+    used = [dict(n=n, tot=tt, n_jumps=nj, sz0_le0=le, sz0_ge0=ge) for n, tt, nj, le, ge in
+            zip(red['unit_n'], red['unit_tot'], red['unit_jumps'], red['unit_le0'], red['unit_ge0'])]
+    n_units = len(used)
+    n_traj = int(red['unit_n'].sum())
     T = time.size
 
     # blocks: nblocks contiguous groups of whole units, block mean = block sum / block count
@@ -478,11 +558,115 @@ def compute(path, nblocks=None, fitmin=5.0, fitmax=15.0, beta_ovr=None, epsil_ov
                 K12=K12, K12_SE=K12_SE, K12t=K12t, M12=M12, M12_SE=M12_SE,
                 m_full=m_full, b_full=b_full, r_full=r_full, n_full=n_full, **br,
                 P2eq=P2eq, beta=beta, n_traj=n_traj, nbds=nbds, nblocks=nb,
-                n_files=len({u.file for u in units}), n_units=n_units, cache_stats=st,
+                n_files=red['n_files'], n_units=n_units, cache_stats=red['cache_stats'],
+                n_traj_cfg=red['n_traj_cfg'], complete=red['complete'],
+                has_jump_rule=has_jump_rule(cfg),
                 n_jumps=n_jumps, jumps=jumps, c0=c0, full_jump=full, Tjump=cfg.get('Tjump'),
                 jump_label=jump_label(cfg),
                 fitmin=fitmin, fitmax=fitmax, w0_only=w0_only,
                 params=dict(kvec=kvec, epsil=epsil, lbd=lbd, delta=delta))
+
+
+def compute(path, nblocks=None, fitmin=5.0, fitmax=15.0, beta_ovr=None, epsil_ovr=None,
+            slab=None, w0_only=False, c0=None, ncores=None, unit_rows=1000,
+            cache=True, refresh=False, cache_dir=None, save_to=None):
+    """
+    reduce() + finish(): the analysis of a shard directory or a data.hdf -- or of a saved .npz, if
+    `path` is one (its own w0_only then applies).  save_to: also write the per-unit partials there.
+    (slab is accepted for backward compatibility and ignored.)
+    """
+    if str(path).endswith('.npz'):
+        red = load_reduced(path, epsil_ovr)
+    else:
+        red = reduce(path, epsil_ovr=epsil_ovr, w0_only=w0_only, ncores=ncores, unit_rows=unit_rows,
+                     cache=cache, refresh=refresh, cache_dir=cache_dir)
+        if save_to and epsil_ovr is None:
+            save_reduced(save_to, red)
+        elif save_to:                        # never overwrite the run's own partials with another epsil
+            print(f'[rate] --epsil given: {save_to} not written (it holds the partials of the run\'s '
+                  f'own epsil)', flush=True)
+    return finish(red, nblocks=nblocks, fitmin=fitmin, fitmax=fitmax, beta_ovr=beta_ovr, c0=c0)
+
+
+def raw_source(point_dir):
+    """shards/ or data.hdf of a point dir, or None if the raw data is gone."""
+    for name, ok in (('shards', os.path.isdir), ('data.hdf', os.path.isfile)):
+        p = os.path.join(point_dir, name)
+        if ok(p):
+            return p
+    return None
+
+
+def saved_path(point_dir, w0_only):
+    """The saved partials of the variant: rate_nojump.npz for --w0-only, falling back to rate.npz
+    when that run has no jump rule (the two variants are identical then)."""
+    p = os.path.join(point_dir, SAVED[bool(w0_only)])
+    if w0_only and not os.path.isfile(p):
+        q = os.path.join(point_dir, SAVED[False])
+        if os.path.isfile(q):
+            with np.load(q, allow_pickle=False) as z:
+                if not has_jump_rule(json.loads(str(z['config_json']))):
+                    return q
+    return p
+
+
+_FINISH = ('nblocks', 'fitmin', 'fitmax', 'beta_ovr', 'epsil_ovr', 'c0')
+
+
+def analyze_point(point_dir, w0_only=False, saved_only=False, **kw):
+    """
+    (result, 'raw' | 'saved') of one point dir: from its shards/ (or data.hdf) if present -- saving
+    rate.npz / rate_nojump.npz next to them -- else (or with saved_only) from the saved .npz.
+    """
+    raw, saved = raw_source(point_dir), saved_path(point_dir, w0_only)
+    if raw is not None and not saved_only:
+        return compute(raw, w0_only=w0_only, save_to=os.path.join(point_dir, SAVED[bool(w0_only)]),
+                       **kw), 'raw'
+    if os.path.isfile(saved):
+        r = compute(saved, **{k: v for k, v in kw.items() if k in _FINISH})
+        r['w0_only'] = r['w0_only'] or bool(w0_only)      # rate.npz of a jump-free run serves --w0-only
+        return r, 'saved'
+    raise RuntimeError(f'no shards/, data.hdf or {os.path.basename(saved)} in {point_dir or "."}'
+                       + (' (--saved-only)' if raw is not None else ''))
+
+
+def delete_shards(point_dir, r, kw=None, tag='[rate]'):
+    """
+    After an analysis of COMPLETE raw data: make sure every variant worth keeping is saved (a run
+    with a jump rule needs both rate.npz and rate_nojump.npz -- the missing one is computed from the
+    shards now), then remove shards/ and shards_partials/.  A data.hdf is left alone.  Returns True
+    if deleted.
+    """
+    if not r.get('complete', False) or r['n_traj'] < r['n_traj_cfg']:
+        print(f"{tag} NOT deleting the shards: {r['n_traj']} of {r['n_traj_cfg']} trajectories read"
+              + ('' if r.get('complete', False) else ', some shards still being written')
+              + ' (still running, or failed trajectories?)', flush=True)
+        return False
+    shards = os.path.join(point_dir, 'shards')
+    if not os.path.isdir(shards):
+        if os.path.isfile(os.path.join(point_dir, 'data.hdf')):
+            print(f"{tag} raw data is a data.hdf: not deleted automatically", flush=True)
+        return False
+    need = [False, True] if r.get('has_jump_rule', True) else [False]
+    for w0 in need:
+        p = os.path.join(point_dir, SAVED[w0])
+        if not os.path.isfile(p):
+            print(f"{tag} saving the {'no-jump (--w0-only)' if w0 else 'with-jumps'} variant too before "
+                  f"deleting: {SAVED[w0]}", flush=True)
+            k = {x: v for x, v in (kw or {}).items() if x in ('ncores', 'unit_rows', 'refresh')}
+            save_reduced(p, reduce(shards, w0_only=w0, **k))
+    missing = [SAVED[w0] for w0 in need if not os.path.isfile(os.path.join(point_dir, SAVED[w0]))]
+    if missing:                                                        # belt and braces
+        raise RuntimeError(f'{missing} missing in {point_dir or "."}: refusing to delete the shards')
+    gone = []
+    for name in ('shards', 'shards_partials'):
+        p = os.path.join(point_dir, name)
+        if os.path.isdir(p):
+            shutil.rmtree(p)
+            gone.append(name + '/')
+    print(f"{tag} deleted {' and '.join(gone)} (results kept in {', '.join(SAVED[w0] for w0 in need)})",
+          flush=True)
+    return True
 
 
 def _fmt_sci(x, sig=4):
@@ -610,7 +794,13 @@ def _main():
         description='Jump-weighted P2(t), M2(t), K12(t) with a block analysis of the rate, and '
                     'M12(t), from RP-MASH shards or a data.hdf.')
     ap.add_argument('--file',    default=None,
-                    help='a shard directory or a data.hdf (default: shards/ if it exists, else data.hdf)')
+                    help='a shard directory, a data.hdf or a saved rate*.npz (default: shards/ if it '
+                         'exists, else data.hdf, else rate.npz / rate_nojump.npz)')
+    ap.add_argument('--delete-shards', action='store_true',
+                    help='after saving the .npz (both variants for a run with jumps), delete shards/ and '
+                         'shards_partials/ (complete runs only)')
+    ap.add_argument('--saved-only', action='store_true',
+                    help='analyse the saved .npz even if shards/ or data.hdf is still there')
     ap.add_argument('--nblocks', type=int, default=100, help='trajectory blocks (default 100)')
     ap.add_argument('--fitmin',  type=float, default=5.0, help='fit window start (default 5)')
     ap.add_argument('--fitmax',  type=float, default=15.0, help='fit window end (default 15)')
@@ -637,16 +827,30 @@ def _main():
                          'SLURM allocation, else 1)')
     ap.add_argument('--out',     default='analyze_rate.png', help='output png')
     a = ap.parse_args()
-    path = a.file or ('shards' if os.path.isdir('shards') else 'data.hdf')
-
+    if a.w0_only and a.out == 'analyze_rate.png':
+        a.out = 'analyze_rate_nojump.png'
+    kw = dict(nblocks=a.nblocks, fitmin=a.fitmin, fitmax=a.fitmax, beta_ovr=a.beta, epsil_ovr=a.epsil,
+              c0=a.c0, ncores=a.ncores, unit_rows=a.unit_rows, cache=not a.no_cache, refresh=a.refresh,
+              cache_dir=a.cache_dir)
     try:
-        r = compute(path, nblocks=a.nblocks, fitmin=a.fitmin, fitmax=a.fitmax,
-                    beta_ovr=a.beta, epsil_ovr=a.epsil, w0_only=a.w0_only, c0=a.c0,
-                    ncores=a.ncores, unit_rows=a.unit_rows, cache=not a.no_cache,
-                    refresh=a.refresh, cache_dir=a.cache_dir)
+        if a.file is None:                   # this point dir: raw data if present, else the saved .npz
+            r, src = analyze_point('', w0_only=a.w0_only, saved_only=a.saved_only, **kw)
+            path = raw_source('') if src == 'raw' else saved_path('', a.w0_only)
+        else:
+            path = a.file
+            is_npz = path.endswith('.npz')
+            save_to = None if is_npz else os.path.join(os.path.dirname(os.path.normpath(path)),
+                                                      SAVED[bool(a.w0_only)])
+            r = compute(path, w0_only=a.w0_only, save_to=save_to, **kw)
+            src = 'saved' if is_npz else 'raw'
     except RuntimeError as e:
         raise SystemExit(f'[rate] {e}')
     _plot(a.out, r, tmax=a.tmax)
+    if src == 'raw' and a.epsil is None:
+        print(f"[rate] saved the per-unit partials to "
+              f"{os.path.join(os.path.dirname(os.path.normpath(path)), SAVED[bool(a.w0_only)])}")
+    elif src == 'saved':
+        print(f"[rate] analysed from {path} (no raw data read)")
 
     p = r['params']
     print(f"[rate] {path}: n_traj={r['n_traj']} from {r['n_files']} file(s) / {r['n_units']} unit(s), "
@@ -678,6 +882,13 @@ def _main():
         print(f"[rate] WARNING: {r['n_skipped']} block(s) had <2 finite points in the window "
               f"and were skipped.")
     print(f"[rate] wrote {a.out}")
+    if a.delete_shards:
+        if src == 'raw' and a.epsil is not None:
+            print('[rate] --delete-shards ignored with --epsil (the saved partials were not written)')
+        elif src == 'raw':
+            delete_shards(os.path.dirname(os.path.normpath(path)), r, kw)
+        else:
+            print('[rate] --delete-shards: nothing to delete (analysed from the saved .npz)')
 
 
 if __name__ == '__main__':

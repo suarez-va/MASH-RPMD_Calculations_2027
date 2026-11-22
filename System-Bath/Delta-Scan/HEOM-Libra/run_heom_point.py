@@ -29,6 +29,7 @@ import os
 import sys
 import json
 import time
+import shutil
 import argparse
 
 import yaml
@@ -132,6 +133,56 @@ def load_p2(valdir):
             P2 = np.array(f["denmat/data"][:, 1, 1]).real
         return t / r["beta"], P2, float(r["P2eq"]), float(r["beta"])
     return None
+
+
+RAW_DIRS = ("heom_therm", "heom_dyn")   # libra's raw output of the two legs (heom_therm: every ADM, large)
+
+
+def ensure_dynamics_npz(valdir):
+    """
+    Make sure a finished point has its dynamics.npz -- the compact record of the run (t, rho(t),
+    k(t), P2eq, beta: everything the collector plots and refits from).  Points run before the
+    script saved it get it rebuilt here from heom_dyn/mem_data.hdf + result.json, exactly as the run
+    builds it.  Returns True if dynamics.npz exists afterwards.
+    """
+    npz = os.path.join(valdir, "dynamics.npz")
+    if os.path.exists(npz):
+        return True
+    hdf = os.path.join(valdir, "heom_dyn", "mem_data.hdf")
+    res = os.path.join(valdir, "result.json")
+    if not (os.path.exists(hdf) and os.path.exists(res)):
+        return False
+    with open(res) as f:
+        r = json.load(f)
+    with h5py.File(hdf, "r") as f:
+        t_ar = np.ravel(np.array(f["time/data"][:]))
+        rhot = np.array(f["denmat/data"][:, :, :])
+    beta, P2eq = float(r["beta"]), float(r["P2eq"])
+    P2t = rhot[:, 1, 1].real
+    kt = np.gradient(P2t, t_ar) / (1 - P2t / P2eq)
+    tmp = os.path.join(valdir, "dynamics.tmp.npz")
+    np.savez(tmp, t=t_ar, t_beta=t_ar / beta, rho=rhot, kt=kt, P2eq=P2eq, beta=beta)
+    os.replace(tmp, npz)
+    return True
+
+
+def delete_raw(valdir):
+    """
+    Remove libra's raw output (heom_therm/, heom_dyn/) of a finished point -- only when its
+    result.json and dynamics.npz exist, which hold everything the analysis needs.  Returns the
+    freed bytes, or None if the point was not safe to clean.
+    """
+    if not (os.path.exists(os.path.join(valdir, "result.json"))
+            and os.path.exists(os.path.join(valdir, "dynamics.npz"))):
+        return None
+    freed = 0
+    for name in RAW_DIRS:
+        d = os.path.join(valdir, name)
+        if os.path.isdir(d):
+            for root, _, files in os.walk(d):
+                freed += sum(os.path.getsize(os.path.join(root, fn)) for fn in files)
+            shutil.rmtree(d)
+    return freed
 
 
 def refit_rows(rows, grid_dir, fitmin, fitmax):

@@ -21,6 +21,16 @@ point of k(t) (`rate_last`).
     python3 2_collect.py --fitmin 5 --fitmax 15   # refit from the saved trajectories, no HEOM rerun
     python3 2_collect.py --no-plots               # only the numbers, skip the per-point PNGs
     python3 2_collect.py --plot-fits              # also write fits.png: K2(t) + fit for every point
+
+Raw data vs the saved result (as the RP_MASH analyses with --delete-shards): a point's raw output
+is libra's eps_grid/val<idx>/heom_therm/ (every auxiliary density matrix of the thermalization --
+the bulk, ~GB at KK=3 LL=17) and heom_dyn/; its saved result is result.json + dynamics.npz (t,
+rho(t), k(t), P2eq, beta), which is everything this script plots and refits from.  So:
+    python3 2_collect.py --delete-raw             # ... then delete heom_therm/ + heom_dyn/ of every
+                                                  # point that has result.json and dynamics.npz
+Every later run (--fitmin/--fitmax refits, plots, scan_rates.txt) works unchanged without them.
+A point run before dynamics.npz existed gets it rebuilt from heom_dyn/ first.  Points still running
+(no result.json yet) are never touched.
 """
 
 import os
@@ -34,7 +44,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from run_heom_point import epsilon_grid, fit_window, refit_rows, plot_fits, k2_from_p2
+from run_heom_point import ensure_dynamics_npz, delete_raw, epsilon_grid, fit_window, refit_rows, plot_fits, k2_from_p2
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -45,6 +55,9 @@ ap.add_argument("--fitmax", type=float, default=None, help="K2 fit window end, t
 ap.add_argument("--no-plots", action="store_true", help="do not write the per-point dynamics.png")
 ap.add_argument("--plot-fits", action="store_true", help="also write fits.png (K2(t) and its fit, per point)")
 ap.add_argument("--out", default="scan_rates.txt", help="summary file name in this directory")
+ap.add_argument("--delete-raw", action="store_true",
+                help="after the analysis, delete heom_therm/ and heom_dyn/ of every finished point "
+                     "(result.json + dynamics.npz are kept: everything the analysis needs)")
 args = ap.parse_args()
 cfg_path = args.config if os.path.isabs(args.config) else os.path.join(script_dir, args.config)
 with open(cfg_path) as f:
@@ -69,6 +82,13 @@ if not rows:
     raise SystemExit("no results found - run 1_run_eps_scan_local.py first")
 
 rows.sort(key=lambda r: r["beta_epsilon"])
+
+# old points (run before dynamics.npz was saved): rebuild it from heom_dyn/ while that still exists
+rebuilt = [r["idx"] for r in rows
+           if not os.path.exists(os.path.join(grid_dir, f"val{r['idx']}", "dynamics.npz"))
+           and ensure_dynamics_npz(os.path.join(grid_dir, f"val{r['idx']}"))]
+if rebuilt:
+    print(f"rebuilt dynamics.npz from heom_dyn/ for point(s) {rebuilt}")
 
 # K2 line-fit rate: reuse result.json's fit if it used this window, else refit from the trajectory
 fitmin, fitmax = fit_window(cfg)
@@ -252,5 +272,18 @@ print(f"\nwrote {out}")
 
 if args.plot_fits:
     print(f"wrote {plot_fits(rows, grid_dir, fitmin, fitmax, 'beta_epsilon', 'beta*eps = {:g}')}")
+
+if args.delete_raw:
+    freed, kept = 0, []
+    for r in rows:
+        f = delete_raw(os.path.join(grid_dir, f"val{r['idx']}"))
+        if f is None:
+            kept.append(r["idx"])
+        else:
+            freed += f
+    print(f"\n--delete-raw: removed heom_therm/ + heom_dyn/ of {len(rows) - len(kept)} point(s), "
+          f"{freed / 1e9:.3f} GB freed (result.json + dynamics.npz kept)")
+    if kept:
+        print(f"WARNING: raw data KEPT for point(s) {kept}: no dynamics.npz (and none could be rebuilt)")
 
 print("\nnext: python3 ../figure.py")

@@ -62,7 +62,7 @@ CONFIG = {
 
     # Batch 2
     #'nucP_init_scan'    : [4.473, 4.5, 4.6, 4.7, 4.8, 4.9],   # incident momenta
-    #'run_time_factor'   : 5.0,
+    #'run_time_factor'   : 3.0,
 
     # Batch 3
     #'nucP_init_scan'    : [5.0, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9,

@@ -12,9 +12,19 @@ Per method dir it prints a table and copy-pasteable arrays, and saves both to <m
 BO vs MASH is taken from the method dir's config.py (dynamics == 'bo').  The per-unit partials
 are cached as usual (<shards>_partials/), so a re-run only does the new shards.
 
+Every point also saves its per-unit partials -- MASH: <point>/rate.npz (rate_nojump.npz with
+--w0-only), BO: <point>/bo_rate.npz; see analyze_rate.py / analyze_bo_rate.py -- and a point without
+shards/ or data.hdf is analysed from them, so scan_rates.txt keeps covering every point after its
+shards are gone (any --nblocks / --fitmin / --fitmax still works from the saved partials):
+    --delete-shards   delete shards/ + shards_partials/ after a successful analysis of complete
+                      shards (the .npz written first -- for a MASH run with jumps BOTH variants, so
+                      --w0-only keeps working; incomplete runs are kept, with a warning)
+    --saved-only      analyse the saved .npz even where the shards still exist
+
 Usage (PYTHONPATH=<RP_MASH root>):
     python scan_rates.py Low-Friction/Delta-Scan/*/ --ncores 16
     cd Low-Friction/Delta-Scan/MASH-Classical && python ../../../scan_rates.py --ncores 16
+    cd Delta-Scan/BOMD-Classical && python ../../scan_rates.py --ncores 16 --delete-shards
 """
 
 import os
@@ -75,20 +85,24 @@ def scan_points(method_dir):
 
 def analyze_point(point_dir, is_bo, a):
     """Run the right analysis on one point; return the result dict (PNG written into point_dir)."""
-    path = os.path.join(point_dir, 'shards')
-    if not os.path.isdir(path):
-        path = os.path.join(point_dir, 'data.hdf')
-        if not os.path.isfile(path):
-            raise RuntimeError(f'no shards/ or data.hdf in {point_dir}')
     common = dict(nblocks=a.nblocks, fitmin=a.fitmin, fitmax=a.fitmax, ncores=a.ncores,
                   refresh=a.refresh)
     if is_bo:
-        r = analyze_bo_rate.compute(path, **common)
+        r, src = analyze_bo_rate.analyze_point(point_dir, saved_only=a.saved_only, **common)
         analyze_bo_rate._plot(os.path.join(point_dir, 'analyze_bo_rate.png'), r, tmax=a.tmax)
-    else:
-        r = analyze_rate.compute(path, w0_only=a.w0_only, **common)
-        out = 'analyze_rate_nojump.png' if a.w0_only else 'analyze_rate.png'
-        analyze_rate._plot(os.path.join(point_dir, out), r, tmax=a.tmax)
+        if src == 'saved':
+            print(f'[scan]     from {analyze_bo_rate.SAVED} (no raw data)', flush=True)
+        elif a.delete_shards:
+            analyze_bo_rate.delete_shards(point_dir, r, tag='[scan]    ')
+        return r
+    r, src = analyze_rate.analyze_point(point_dir, w0_only=a.w0_only, saved_only=a.saved_only, **common)
+    out = 'analyze_rate_nojump.png' if a.w0_only else 'analyze_rate.png'
+    analyze_rate._plot(os.path.join(point_dir, out), r, tmax=a.tmax)
+    if src == 'saved':
+        print(f'[scan]     from {os.path.basename(analyze_rate.saved_path(point_dir, a.w0_only))} '
+              f'(no raw data)', flush=True)
+    elif a.delete_shards:
+        analyze_rate.delete_shards(point_dir, r, common, tag='[scan]    ')
     return r
 
 
@@ -157,6 +171,10 @@ def _main():
     ap.add_argument('--w0-only', action='store_true', help='MASH only: no-jump baseline (W^(0))')
     ap.add_argument('--refresh', action='store_true', help='recompute every cached partial')
     ap.add_argument('--out',     default='scan_rates.txt', help='summary file name in each method dir')
+    ap.add_argument('--delete-shards', action='store_true',
+                    help='delete shards/ + shards_partials/ after saving the .npz (complete runs only)')
+    ap.add_argument('--saved-only', action='store_true',
+                    help='analyse the saved .npz even where the shards still exist')
     ap.add_argument('-v', '--verbose', action='store_true', help='print tracebacks of failed points')
     a = ap.parse_args()
     if a.w0_only and a.out == 'scan_rates.txt':
