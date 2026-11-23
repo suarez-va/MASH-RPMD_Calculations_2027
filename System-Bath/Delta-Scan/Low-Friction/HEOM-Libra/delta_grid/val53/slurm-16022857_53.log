@@ -1,0 +1,67 @@
+---------------------------------------
+Begin Slurm Prolog: Nov-22-2026 20:24:28
+Job ID:    16023032
+User ID:   vsuarez6
+Account:   gts-jkretchmer3-chemx
+Job name:  HEOM
+Partition: cpu-large
+QOS:       inferno
+---------------------------------------
+job 16022857_53 on atl1-1-01-005-23-1.pace.gatech.edu, 4 thread(s), started Sun Nov 22 08:24:28 PM EST 2026
+<frozen importlib._bootstrap>:228: RuntimeWarning: to-Python converter for std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > > already registered; second conversion method ignored.
+<frozen importlib._bootstrap>:228: RuntimeWarning: to-Python converter for boost::python::detail::container_element<std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >, unsigned long, boost::python::detail::final_vector_derived_policies<std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >, false> > already registered; second conversion method ignored.
+<frozen importlib._bootstrap>:228: RuntimeWarning: to-Python converter for std::vector<std::vector<float, std::allocator<float> >, std::allocator<std::vector<float, std::allocator<float> > > > already registered; second conversion method ignored.
+<frozen importlib._bootstrap>:228: RuntimeWarning: to-Python converter for boost::python::detail::container_element<std::vector<std::vector<float, std::allocator<float> >, std::allocator<std::vector<float, std::allocator<float> > > >, unsigned long, boost::python::detail::final_vector_derived_policies<std::vector<std::vector<float, std::allocator<float> >, std::allocator<std::vector<float, std::allocator<float> > > >, false> > already registered; second conversion method ignored.
+<frozen importlib._bootstrap>:228: RuntimeWarning: to-Python converter for std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > already registered; second conversion method ignored.
+<frozen importlib._bootstrap>:228: RuntimeWarning: to-Python converter for boost::python::detail::container_element<std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >, unsigned long, boost::python::detail::final_vector_derived_policies<std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >, false> > already registered; second conversion method ignored.
+<frozen importlib._bootstrap>:228: RuntimeWarning: to-Python converter for std::vector<std::vector<std::complex<double>, std::allocator<std::complex<double> > >, std::allocator<std::vector<std::complex<double>, std::allocator<std::complex<double> > > > > already registered; second conversion method ignored.
+<frozen importlib._bootstrap>:228: RuntimeWarning: to-Python converter for boost::python::detail::container_element<std::vector<std::vector<std::complex<double>, std::allocator<std::complex<double> > >, std::allocator<std::vector<std::complex<double>, std::allocator<std::complex<double> > > > >, unsigned long, boost::python::detail::final_vector_derived_policies<std::vector<std::vector<std::complex<double>, std::allocator<std::complex<double> > >, std::allocator<std::vector<std::complex<double>, std::allocator<std::complex<double> > > > >, false> > already registered; second conversion method ignored.
+idx=53  log10(beta*Delta)=0.0403030303  Delta=1.0972435341278592  beta*epsilon=0.0
+threads = 4   cores in affinity mask = 4   SLURM job 16023032 task 53 on atl1-1-01-005-23-1.pace.gatech.edu
+nn_tot = 735471
+ step= 0
+ step= 4000
+ step= 8000
+ step= 12000
+ step= 16000
+ step= 20000
+Calculations took 984.0899238586426 seconds
+In mem_saver.save_data()
+data_name =  ['timestep', 'time', 'denmat', 'auxdenmat']
+keywords =  ['timestep', 'time', 'denmat', 'auxdenmat']
+keys =  dict_keys(['timestep', 'time', 'denmat', 'auxdenmat'])
+Saving the dataset named timestep/data
+Saving the dataset named time/data
+Saving the dataset named denmat/data
+Saving the dataset named auxdenmat/data
+ step= 0
+ step= 4000
+ step= 8000
+ step= 12000
+ step= 16000
+ step= 20000
+Calculations took 3663.6472845077515 seconds
+In mem_saver.save_data()
+data_name =  ['timestep', 'time', 'denmat']
+keywords =  ['timestep', 'time', 'denmat']
+keys =  dict_keys(['timestep', 'time', 'denmat'])
+Saving the dataset named timestep/data
+Saving the dataset named time/data
+Saving the dataset named denmat/data
+k_HEOM = 5.729846e-02   log10(beta*k_HEOM) = -1.2418570718386868   (last point of k(t))
+k_fit  = 0.057265651090647476   log10(beta*k_fit)  = -1.2421057971389682   (K2 fit over [10, 20], r = 1.0)
+timing: therm 1007s, dyn 3664s
+finished Sun Nov 22 09:42:25 PM EST 2026
+---------------------------------------
+Begin Slurm Epilog: Nov-22-2026 21:42:25
+Job ID:        16023032
+Array Job ID:  16022857_53
+User ID:       vsuarez6
+Account:       gts-jkretchmer3-chemx
+Job name:      HEOM
+Resources:     cpu=4,mem=100G,node=1
+Rsrc Used:     cput=05:11:52,vmem=0,walltime=01:17:58,mem=908636K,energy_used=0
+Partition:     cpu-large
+QOS:           inferno
+Nodes:         atl1-1-01-005-23-1
+---------------------------------------
