@@ -14,9 +14,9 @@ CONFIG = {
     'grid_dir'    : 'traj_grid',
 
     'slurm': {
-        'max_tasks'     : 100,
+        'max_tasks'     : 500,
         'job_name'      : 'MASHRPMD',
-        'time'          : '39:00:00',
+        'time'          : '49:00:00',
         'cpus_per_task' : 10,
         'max_concurrent': None,
         'partition'     : None,
@@ -43,7 +43,7 @@ CONFIG = {
     'kvec'              : 16.0,                 # marcus parabola curvature
     'lbd'               : 12.0,                 # reorganization energy
     'epsil'             : 0.0,                  # driving force
-    'log10_delta_scan'  : [-0.50, -0.35, -0.20, -0.10, 0.00, 0.10, 0.20, 0.30, 0.40, 0.50],    # diabatic coupling strength
+    'log10_delta_scan'  : [-0.40, -0.20, 0.00, 0.20, 0.40],    # diabatic coupling strength
     'bath'              : [0, 1.0, 128.0, 4.0],    # [N_bath, mass, gamma, w_b]; N_bath=0 -> no explicit bath
 
     # ------------------------------------------------------------------ thermostat + integrator
