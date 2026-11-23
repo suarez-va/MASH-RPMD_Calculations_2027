@@ -54,6 +54,6 @@ CONFIG = {
     'therm_epsil'       : -100.0,
     'therm_log10_delta' : -7.0,
     'therm_time'        : 25.0,
-    'traj_time'         : 15.0,
-    'Nprint'            : 500, 
+    'traj_time'         : 20.0,
+    'Nprint'            : 1000, 
 }
