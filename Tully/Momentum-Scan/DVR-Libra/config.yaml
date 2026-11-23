@@ -62,15 +62,15 @@ scan:                  # incident momenta p0 and run length, one batch at a time
   # run_time_factor: 3
 
 grid:                  # FFT grid: fixed spacing, box sized per point by run_dvr_point.box()
-  dx: 0.01             # k_max = pi/dx = 62.8: converged (<~1e-4) for p0 + 3 < k_max, i.e. every p0 <= 30
+  dx: 0.001             # k_max = pi/dx = 62.8: converged (<~1e-4) for p0 + 3 < k_max, i.e. every p0 <= 30
   n_sigma: 6           # buffer: momenta up to p0 + n_sigma/(2 sigma), positions n_sigma*sigma beyond the fronts
   edge_frac: 0.05      # keep the packet out of the outer edge_frac of the box on each side (the edge check)
 
 dyn:
   method: split-operator   # the only propagator implemented in libra's exact_torch solver
-  dt: 0.25              # split-operator step (1.0 checked to agree within 1e-4)
-  save_every: 20       # keep a snapshot every this many steps
-  max_snapshots: 500   # long runs widen save_every so no more snapshots than this are stored
+  dt: 1.00              # split-operator step (1.0 checked to agree within 1e-4)
+  save_every: 5       # keep a snapshot every this many steps
+  max_snapshots: 1000   # long runs widen save_every so no more snapshots than this are stored
   num_threads: 1       # cores per scan point (local: taskset block)
   # nsteps is not set here: run_dvr_point.py takes it from scan.run_time_factor (see scan:).
 
