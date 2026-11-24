@@ -7,6 +7,8 @@ nucP_init in `nucP_init_scan`, point v landing in nucP_<v>/shards/ (see ../../..
     python -m workflow.slurm  --config config.py && sbatch submit_grid.sh    # HPC
 """
 
+import numpy as np
+
 CONFIG = {
     # ----------------------------------------------------------------- orchestration (workflow)
     'n_traj'      : 100000,                      # number of independent trajectories to run
