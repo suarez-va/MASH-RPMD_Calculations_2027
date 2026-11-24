@@ -44,7 +44,7 @@ CONFIG = {
     'nnuc'              : 1,
     'nstates'           : 2,
     'mass'              : [2000.0],              # mass
-    'beta'              : 100.0,                 # inverse temperature (ring-polymer springs only)
+    'beta'              : (3.0)**2 * 2000 / (2 * np.pi),                 # inverse temperature (ring-polymer springs only)
     'A'                 : 0.01,
     'B'                 : 1.6,
     'C'                 : 0.005,
@@ -56,7 +56,7 @@ CONFIG = {
     'nucR_init'         : -10.0,                 # start left of the crossing at R = 0
 
     # Batch 1
-    'nucP_init_scan'    : [2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9,
+    'nucP_init_scan'    : [2.0, 2.5,
                            3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9,
                            4.0, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9,
                            5.0, 5.5, 6.0, 6.5],   # incident momenta
