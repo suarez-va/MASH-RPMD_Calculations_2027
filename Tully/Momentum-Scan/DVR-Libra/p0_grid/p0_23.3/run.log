@@ -1,0 +1,13 @@
+run_time_factor = 3 x t0 = 858.4 a.u. -> nsteps = 2580 (t_final = 2580);  classical arrival at x_split on the adiabat: 859.3 a.u.
+Tully 1 (tanh form): {'A': 0.01, 'B': 1.6, 'C': 0.005, 'D': 1.0}
+wavepacket: x0=-10.0 p0=23.3 sigma=1.0 mass=2000.0 (diabatic state 0)
+grid: [-33.254, 33.253] with 66508 points (dx = 0.001);  dt=1.0, nsteps=2580
+output -> /storage/project/r-jkretchmer3-0/vsuarez6/repos/GET_BETTER_WITH_HPC/MASH-RPMD_Calculations_2027/Tully/Momentum-Scan/tmp2/p0_grid/p0_23.3
+/storage/home/hcoda1/8/vsuarez6/r-jkretchmer3-0/repos/libra-code/_build/src/libra_py/dynamics/exact_torch/compute.py:449: UserWarning: Casting complex values to real discards the imaginary part (Triggered internally at /pytorch/aten/src/ATen/native/Copy.cpp:307.)
+  self.total_energy[istep] = KE + PE
+raw densities -> /storage/project/r-jkretchmer3-0/vsuarez6/repos/GET_BETTER_WITH_HPC/MASH-RPMD_Calculations_2027/Tully/Momentum-Scan/tmp2/p0_grid/p0_23.3/densities.npz  (275.6 MB)
+E_total = 0.125865   t_final = 2580
+C_Rg(t_final) = 0.000000  C_Tg(t_final) = 0.389330  C_Re(t_final) = 0.000000  C_Te(t_final) = 0.609471
+norm drift 6.50e-04   energy drift 8.16e-05   edge population 1.15e-09   high-k population 2.94e-11
+model check: max |E_adi(solver) - E_adi(analytic)| = 2.12e-09
+timing: dyn 95.4s

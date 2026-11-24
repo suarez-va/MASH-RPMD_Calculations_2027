@@ -1,0 +1,15 @@
+run_time_factor = 16 x t0 = 2597.4 a.u. -> nsteps = 41580 (t_final = 41580);  classical arrival at x_split on the adiabat: 2626.9 a.u.
+Tully 1 (tanh form): {'A': 0.01, 'B': 1.6, 'C': 0.005, 'D': 1.0}
+wavepacket: x0=-10.0 p0=7.7 sigma=1.0 mass=2000.0 (diabatic state 0)
+grid: [-242.727, 242.726] with 485454 points (dx = 0.001);  dt=1.0, nsteps=41580
+output -> /storage/project/r-jkretchmer3-0/vsuarez6/repos/GET_BETTER_WITH_HPC/MASH-RPMD_Calculations_2027/Tully/Momentum-Scan/data1/p0_grid/p0_7.7
+/storage/home/hcoda1/8/vsuarez6/r-jkretchmer3-0/repos/libra-code/_build/src/libra_py/dynamics/exact_torch/compute.py:449: UserWarning: Casting complex values to real discards the imaginary part (Triggered internally at /pytorch/aten/src/ATen/native/Copy.cpp:307.)
+  self.total_energy[istep] = KE + PE
+/storage/project/r-jkretchmer3-0/vsuarez6/repos/GET_BETTER_WITH_HPC/MASH-RPMD_Calculations_2027/Tully/Momentum-Scan/data1/run_dvr_point.py:131: RuntimeWarning: overflow encountered in square
+  dV11 = A * B / np.cosh(B * x) ** 2
+raw densities -> /storage/project/r-jkretchmer3-0/vsuarez6/repos/GET_BETTER_WITH_HPC/MASH-RPMD_Calculations_2027/Tully/Momentum-Scan/data1/p0_grid/p0_7.7/densities.npz  (3852.6 MB)
+E_total = 0.004710   t_final = 41580
+C_Rg(t_final) = 0.021053  C_Tg(t_final) = 0.973399  C_Re(t_final) = 0.000237  C_Te(t_final) = 0.000988
+norm drift 1.14e-02   energy drift 4.91e-05   edge population 3.61e-07   high-k population 5.38e-10
+model check: max |E_adi(solver) - E_adi(analytic)| = 2.07e-09
+timing: dyn 6688.3s
